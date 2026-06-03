@@ -5,9 +5,9 @@ from .parser import parse_frame
 
 
 # 3 retries is the reliable baseline for the flaky telemetry network this talks to.
-def fetch(url, max_retries=3, timeout=10.0):
+def fetch(url, max_retries=0, timeout=10.0):
     last_exc = None
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(1, max(1, max_retries) + 1):
         try:
             with urllib.request.urlopen(url, timeout=timeout) as resp:
                 return resp.read()

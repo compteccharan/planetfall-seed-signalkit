@@ -38,7 +38,7 @@ class TestFetch(unittest.TestCase):
             original_sleep = client_module.time.sleep
             client_module.time.sleep = slept.append
 
-            result = fetch("http://example.com/frame")
+            result = fetch("http://example.com/frame", max_retries=3)
         finally:
             urllib.request.urlopen = original
             client_module.time.sleep = original_sleep
