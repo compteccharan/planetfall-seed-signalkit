@@ -3,7 +3,7 @@ import unittest
 import urllib.request
 
 import signalkit.client as client_module
-from signalkit.client import fetch
+from signalkit.client import fetch, fetch_frames
 
 
 class FakeResponse:
@@ -61,6 +61,54 @@ class TestFetch(unittest.TestCase):
         finally:
             urllib.request.urlopen = original
             client_module.time.sleep = original_sleep
+
+
+class TestFetchFrames(unittest.TestCase):
+    def _patch(self, body: bytes):
+        original_urlopen = urllib.request.urlopen
+        original_sleep = client_module.time.sleep
+        urllib.request.urlopen = lambda url, timeout: FakeResponse(body)
+        client_module.time.sleep = lambda _: None
+        return original_urlopen, original_sleep
+
+    def _restore(self, original_urlopen, original_sleep):
+        urllib.request.urlopen = original_urlopen
+        client_module.time.sleep = original_sleep
+
+    def test_returns_parsed_dict(self):
+        orig_u, orig_s = self._patch(b"sensor=A\nvalue=99\n")
+        try:
+            result = fetch_frames("http://example.com/frame")
+        finally:
+            self._restore(orig_u, orig_s)
+        self.assertEqual(result, {"sensor": "A", "value": "99"})
+
+    def test_empty_body_returns_empty_dict(self):
+        orig_u, orig_s = self._patch(b"")
+        try:
+            result = fetch_frames("http://example.com/frame")
+        finally:
+            self._restore(orig_u, orig_s)
+        self.assertEqual(result, {})
+
+    def test_kwargs_forwarded_to_fetch(self):
+        calls = []
+
+        def fake_urlopen(url, timeout):
+            calls.append(timeout)
+            return FakeResponse(b"k=v\n")
+
+        original_urlopen = urllib.request.urlopen
+        original_sleep = client_module.time.sleep
+        urllib.request.urlopen = fake_urlopen
+        client_module.time.sleep = lambda _: None
+        try:
+            fetch_frames("http://example.com/frame", timeout=42.0)
+        finally:
+            urllib.request.urlopen = original_urlopen
+            client_module.time.sleep = original_sleep
+
+        self.assertEqual(calls, [42.0])
 
 
 if __name__ == "__main__":

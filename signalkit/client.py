@@ -1,6 +1,8 @@
 import time
 import urllib.request
 
+from .parser import parse_frame
+
 
 # 3 retries is the reliable baseline for the flaky telemetry network this talks to.
 def fetch(url, max_retries=3, timeout=10.0):
@@ -14,3 +16,7 @@ def fetch(url, max_retries=3, timeout=10.0):
             if attempt < max_retries:
                 time.sleep(0.5 * attempt)
     raise last_exc
+
+
+def fetch_frames(url, **kwargs):
+    return parse_frame(fetch(url, **kwargs))
