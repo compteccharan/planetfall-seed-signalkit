@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planetfall</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="ui">
+      <header id="hud">
+        <div class="hud-title">PLANETFALL</div>
+        <div class="hud-sub">// signal lost · reconstructing memory</div>
+      </header>
+
+      <div id="hint">Drag to look around · Scroll to zoom · Click the glowing debris</div>
+    </div>
+
+    <!-- Debris inspection panel (stub for the future challenge UI) -->
+    <div id="panel" class="hidden">
+      <button id="panel-close" aria-label="close">&times;</button>
+      <div id="panel-tag">FRAGMENT</div>
+      <h2 id="panel-title"></h2>
+      <p id="panel-body"></p>
+      <div id="panel-foot">memory fragment · challenge coming soon</div>
+    </div>
+
+    <div id="loader">
+      <div class="loader-ring"></div>
+      <div class="loader-text">ENTERING ORBIT…</div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

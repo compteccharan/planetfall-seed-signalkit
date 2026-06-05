@@ -1,0 +1,18 @@
+{
+  "name": "planetfall",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Planetfall — a stranded astronaut reconstructs a lost ship's memory by recovering context. 3D world prototype.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  }
+}
