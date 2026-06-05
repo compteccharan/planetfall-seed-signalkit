@@ -3,6 +3,10 @@
   --accent-warm: #ffb86b;
   --ink: #e8f4ff;
   --panel-bg: rgba(8, 14, 26, 0.82);
+  --pin-shell: #171126;
+  --pin-rim: rgba(255, 244, 232, 0.96);
+  --pin-core: #d79e3a;
+  --pin-shadow: rgba(2, 4, 10, 0.72);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -150,22 +154,27 @@ html, body {
   z-index: 15;
   transition: filter 0.2s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: bottom center;
+  filter:
+    drop-shadow(0 2px 4px var(--pin-shadow))
+    drop-shadow(0 0 6px rgba(255, 184, 107, 0.3));
 }
 #island-pin .pin-svg { display: block; }
 #island-pin .pin-svg path {
-  fill: var(--accent-warm);
-  stroke: rgba(255, 244, 232, 0.85);
-  stroke-width: 1.2;
+  fill: var(--pin-shell);
+  stroke: var(--pin-rim);
+  stroke-width: 1.35;
 }
 #island-pin .pin-svg circle {
-  fill: rgba(20, 12, 6, 0.85);
+  fill: var(--pin-core);
 }
 /* Hover (or keyboard focus, or synced from the 3D region) lifts the pin. */
 #island-pin:hover,
 #island-pin:focus-visible,
 #island-pin.is-hot {
   transform: translate(-50%, -100%) scale(1.12);
-  filter: drop-shadow(0 0 10px rgba(255, 184, 107, 0.6));
+  filter:
+    drop-shadow(0 3px 5px var(--pin-shadow))
+    drop-shadow(0 0 12px rgba(255, 184, 107, 0.62));
   outline: none;
 }
 

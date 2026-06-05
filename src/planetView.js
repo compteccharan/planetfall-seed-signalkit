@@ -105,7 +105,7 @@ export function createPlanetView(renderer, { onIslandClick } = {}) {
   const outline = new THREE.Mesh(
     new THREE.RingGeometry(ringRadius * 0.94, ringRadius, 64),
     new THREE.MeshBasicMaterial({
-      color: 0xffe6b4, transparent: true, opacity: 0,
+      color: 0xfff4e8, transparent: true, opacity: 0,
       side: THREE.DoubleSide, depthTest: false, depthWrite: false,
     })
   );
