@@ -49,14 +49,6 @@ html, body {
   text-shadow: 0 0 18px rgba(111, 227, 255, 0.55);
 }
 
-.hud-sub {
-  margin-top: 6px;
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  opacity: 0.6;
-  text-transform: uppercase;
-}
-
 #hint {
   position: absolute;
   bottom: 26px;
@@ -176,7 +168,7 @@ html, body {
    ship's memory is restored (warning amber → cyan → restored aqua-green). */
 #ship-meter {
   position: absolute;
-  top: 156px;
+  top: 136px;
   left: 32px;
   display: flex;
   flex-direction: column;
@@ -255,7 +247,7 @@ html, body {
 /* Level countdown clock (top-left, under the PLANETFALL title) */
 #countdown {
   position: absolute;
-  top: 98px;
+  top: 78px;
   left: 32px;
   display: flex;
   align-items: center;
