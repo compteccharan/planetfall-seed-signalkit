@@ -8,7 +8,7 @@ import { FRAGMENTS, BUILDERS } from "./debris.js";
 // A Diner-Dash-style loop, one memory at a time, driven by the REAL workflow
 // typed into the ship's terminal:
 //   walk up → terminal opens → `git add` (stage) → `git commit` (freeze in ice)
-//   → Entire offers to link a checkpoint → press y → ship power ticks up.
+//   → Entire offers to link a checkpoint → press y → ship memory restores.
 // When every memory is linked → run `entire checkpoint list` to review them all.
 //
 // PRESSURE: a single level countdown runs the whole time. Bank every memory
@@ -16,7 +16,7 @@ import { FRAGMENTS, BUILDERS } from "./debris.js";
 // (press R to retry). One clock for the whole level — not per-memory.
 //
 // Teaching: a commit just freezes the change; linking a CHECKPOINT (the y/n
-// offer Entire makes after a commit) is what banks it toward the ship's power.
+// offer Entire makes after a commit) is what restores it to the ship's memory.
 
 const INTERACT_DIST = 8;    // how close (XZ) to open a memory's terminal
 const TOTAL_TIME = 45;      // seconds to recover & bank EVERY memory (tunable — scary-tight)
@@ -235,9 +235,12 @@ export function createIslandView(renderer, { onExit } = {}) {
   const termInput = document.getElementById("term-input");
   const termList = document.getElementById("term-list");
   const termMsg = document.getElementById("term-msg");
+  const termCta = document.getElementById("term-cta");
   const countdownEl = document.getElementById("countdown");
   const countdownTime = document.getElementById("countdown-time");
   const levelFail = document.getElementById("level-fail");
+  const briefingEl = document.getElementById("briefing");
+  const briefingStartBtn = document.getElementById("briefing-start");
 
   let target = null;            // nearest memory in range
   let active = false;           // is this view being shown?
@@ -260,6 +263,7 @@ export function createIslandView(renderer, { onExit } = {}) {
   let timeLeft = TOTAL_TIME;
   let timerRunning = false;
   let failed = false;
+  let started = false;          // briefing dismissed → movement + clock go live
 
   const checkpointedCount = () =>
     artifacts.filter((a) => a.state === "checkpointed").length;
@@ -344,6 +348,25 @@ export function createIslandView(renderer, { onExit } = {}) {
     showTutorial("New attempt — bank all three memories before the clock hits zero.", 4500);
   }
 
+  // Landing briefing — the level is frozen (no clock, no movement) until START.
+  function showBriefing() {
+    timerRunning = false;
+    fp.detach();
+    tutorialEl?.classList.add("hidden");
+    briefingEl?.classList.remove("hidden");
+  }
+  function startLevel() {
+    if (started) return;
+    started = true;
+    briefingEl?.classList.add("hidden");
+    fp.attach();
+    timeLeft = TOTAL_TIME;
+    timerRunning = true;
+    updateClock();
+    showTutorial("Memories are surfacing — the clock's short. Bank all three before 0:00!", 6500);
+  }
+  briefingStartBtn?.addEventListener("click", startLevel);
+
   function showTutorial(text, ms = 5500) {
     if (!tutorialEl) return;
     clearTimeout(tutorialTimer);
@@ -359,8 +382,14 @@ export function createIslandView(renderer, { onExit } = {}) {
 
   function setPower() {
     const pct = Math.round((checkpointedCount() / artifacts.length) * 100);
-    if (shipMeterFill) shipMeterFill.style.width = pct + "%";
+    // Vertical gauge — fills bottom-up and shifts color as memory is restored.
+    if (shipMeterFill) shipMeterFill.style.height = pct + "%";
     if (shipMeterPct) shipMeterPct.textContent = pct + "%";
+    if (shipMeter) {
+      shipMeter.classList.toggle("lvl-low", pct > 0 && pct <= 34);
+      shipMeter.classList.toggle("lvl-mid", pct > 34 && pct < 100);
+      shipMeter.classList.toggle("lvl-high", pct >= 100);
+    }
   }
   function showCard(a, shipPct) {
     if (!ckptCard) return;
@@ -428,19 +457,27 @@ export function createIslandView(renderer, { onExit } = {}) {
       termHint.textContent = "# entire checkpoint list";
       termInput.textContent = "entire checkpoint list";
       termInput.classList.remove("is-dim");
+      if (termCta) termCta.innerHTML = "";
       termList?.classList.remove("hidden");
       return;
     }
     termList?.classList.add("hidden");
 
-    const tail = step.type === "command" ? `type:  ${step.cmd}` : "press y / n";
-    termHint.textContent = step.hint ? `# ${step.hint}   ·   ${tail}` : "";
+    // The hint is just the "why"; the actionable command/keys live in the CTA
+    // below the input line, where they're the most prominent thing on screen.
+    termHint.textContent = step.hint ? `# ${step.hint}` : "";
     if (step.type === "confirm") {
       termInput.textContent = `${step.question}  [y/n]`;
       termInput.classList.add("is-dim");
+      if (termCta) termCta.innerHTML =
+        `<span class="cta-label">PRESS</span>` +
+        `<kbd class="cta-key cta-key-yes">Y</kbd><span class="cta-note">link checkpoint</span>` +
+        `<kbd class="cta-key cta-key-no">N</kbd><span class="cta-note">skip</span>`;
     } else {
       termInput.textContent = buffer;
       termInput.classList.remove("is-dim");
+      if (termCta) termCta.innerHTML =
+        `<span class="cta-label">TYPE</span><span class="cta-cmd">${step.cmd}</span>`;
     }
   }
   function flashTerminal(text, ok) {
@@ -497,8 +534,8 @@ export function createIslandView(renderer, { onExit } = {}) {
         `<span class="tl-title">recovered: ${a.fragment.title}</span></div>`
       ).join("");
     }
-    flashTerminal(`${artifacts.length} checkpoints linked · ship fully restored`, true);
-    showTutorial("Ship fully restored. Press Esc to close the terminal, then B to return to orbit.", 0);
+    flashTerminal(`${artifacts.length} checkpoints linked · ship memory restored`, true);
+    showTutorial("Memory restored — the ship knows the way home. Press Esc to close the terminal, then B to return to orbit.", 0);
     renderTerminal();
   }
 
@@ -562,15 +599,22 @@ export function createIslandView(renderer, { onExit } = {}) {
     showCard(a, shipPct);
     setPower();
     teachOnce("checkpointed",
-      "Checkpoint linked — Entire stamps it onto the commit via an `Entire-Checkpoint` trailer, and ship power rose.");
+      "Checkpoint linked — Entire stamps it onto the commit via an `Entire-Checkpoint` trailer, and the ship remembers a little more.");
   }
 
   // ---------- input ----------
   function onCanvasClick() {
+    if (!started) return;                 // briefing up — ignore world clicks
     if (active && !fp.isLocked) fp.lock();
   }
   function onKeyDown(e) {
     if (!active) return;
+
+    // Landing briefing is up — Enter/Space begins the run, nothing else.
+    if (!started) {
+      if (e.code === "Enter" || e.code === "Space") { startLevel(); e.preventDefault(); }
+      return;
+    }
 
     // The run failed — only R (retry) does anything.
     if (failed) {
@@ -614,7 +658,7 @@ export function createIslandView(renderer, { onExit } = {}) {
 
   // ---------- HUD per-frame ----------
   function refreshHud() {
-    if (terminalOpen) {
+    if (!started || terminalOpen) {     // briefing up or terminal open → no walk HUD
       setPrompt(null);
       hideControls();
       hideActionBar();
@@ -623,7 +667,7 @@ export function createIslandView(renderer, { onExit } = {}) {
     setControls(fp.isLocked);
     hideActionBar();
     if (!fp.isLocked) { setPrompt("Click to look around"); return; }
-    if (listShown) { setPrompt("Ship fully restored — press B to return to orbit"); return; }
+    if (listShown) { setPrompt("Memory restored — press B to return to orbit"); return; }
     setPrompt("Find the surfacing memory");
   }
 
@@ -651,7 +695,7 @@ export function createIslandView(renderer, { onExit } = {}) {
 
     // Auto open/close the ship's terminal as you reach a memory.
     // (In review mode the terminal is driven manually, so leave it alone.)
-    if (active && !reviewMode && !failed) {
+    if (active && started && !reviewMode && !failed) {
       if (dismissedMemory && target !== dismissedMemory) dismissedMemory = null;
       const canOpen = target && target.state !== "checkpointed" && target !== dismissedMemory;
       if (canOpen && !terminalOpen) openTerminal(target);
@@ -697,7 +741,6 @@ export function createIslandView(renderer, { onExit } = {}) {
   // ---------- lifecycle ----------
   function enter() {
     active = true;
-    fp.attach();
     fp.groundAt(0, terrain.radius * 0.75);
     camera.lookAt(0, terrain.heightAt(0, 0) + 6, 0);
     canvas.addEventListener("click", onCanvasClick);
@@ -706,13 +749,17 @@ export function createIslandView(renderer, { onExit } = {}) {
     setControls(false);
     crosshair?.classList.add("hidden");
     setPower();
-    if (listShown) {                // truly done — the list has been run
+    if (!started) {                 // fresh landing — read the briefing, then START
+      showBriefing();
+    } else if (listShown) {         // truly done — the list has been run
+      fp.attach();
       timerRunning = false;
-      showTutorial("Ship fully restored — press B to return to orbit.", 0);
+      showTutorial("Memory restored — press B to return to orbit.", 0);
     } else if (failed) {
       resetLevel();                 // came back after a wipe → fresh run
     } else {
-      timerRunning = true;          // start (or resume) the level clock
+      fp.attach();
+      timerRunning = true;          // resume the level clock
       if (reviewMode) {             // resume the timed final review
         openTerminal(artifacts[0]); // termTarget unused in review; reopens the prompt
         showTutorial("Type `entire checkpoint list` before the clock hits 0:00!", 0);
@@ -738,6 +785,7 @@ export function createIslandView(renderer, { onExit } = {}) {
     ckptCard?.classList.add("hidden");
     termEl?.classList.add("hidden");
     levelFail?.classList.add("hidden");
+    briefingEl?.classList.add("hidden");
     islandHud?.classList.add("hidden");
     crosshair?.classList.add("hidden");
   }

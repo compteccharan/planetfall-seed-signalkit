@@ -171,93 +171,118 @@ html, body {
 
 /* ---------- Island level-1 HUD ---------- */
 
-/* Ship power meter — the level goal; only checkpoints fill it */
+/* Ship memory gauge — the level goal; only checkpoints fill it. A thick
+   VERTICAL bar under the clock that fills bottom-up and shifts colour as the
+   ship's memory is restored (warning amber → cyan → restored aqua-green). */
 #ship-meter {
   position: absolute;
-  top: 26px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 156px;
+  left: 32px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 9px 16px;
-  background: rgba(8, 14, 26, 0.55);
-  border: 1px solid rgba(111, 227, 255, 0.28);
-  border-radius: 8px;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(6, 11, 22, 0.7);
+  border: 1px solid rgba(111, 227, 255, 0.32);
+  border-radius: 12px;
   backdrop-filter: blur(8px);
 }
 
 .meter-label {
-  font-size: 10px;
-  letter-spacing: 0.28em;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
   color: var(--accent);
-  opacity: 0.85;
+  opacity: 0.95;
+  white-space: nowrap;
 }
 
 .meter-track {
   position: relative;
-  width: 200px;
-  height: 7px;
-  border-radius: 4px;
-  background: rgba(111, 227, 255, 0.14);
+  width: 22px;
+  height: 150px;
+  border-radius: 11px;
+  background: rgba(111, 227, 255, 0.12);
+  border: 1px solid rgba(111, 227, 255, 0.18);
   overflow: hidden;
 }
 
 #ship-meter-fill {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 0%;
-  background: linear-gradient(90deg, #3aa6c8, var(--accent));
-  box-shadow: 0 0 12px rgba(111, 227, 255, 0.7);
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0%;
+  border-radius: 11px;
+  background: rgba(111, 227, 255, 0.4);
+  transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.5s ease, box-shadow 0.5s ease;
+}
+/* colour climbs with the fill */
+#ship-meter.lvl-low #ship-meter-fill {
+  background: linear-gradient(180deg, #ffc46b, #ff8a3c);
+  box-shadow: 0 0 14px rgba(255, 150, 80, 0.7);
+}
+#ship-meter.lvl-mid #ship-meter-fill {
+  background: linear-gradient(180deg, #9af0ff, #3aa6c8);
+  box-shadow: 0 0 16px rgba(111, 227, 255, 0.8);
+}
+#ship-meter.lvl-high #ship-meter-fill {
+  background: linear-gradient(180deg, #bfffe0, #5cffb0);
+  box-shadow: 0 0 22px rgba(92, 255, 176, 0.95);
 }
 
-#ship-meter.is-full { border-color: rgba(111, 227, 255, 0.7); }
+#ship-meter.is-full { border-color: rgba(92, 255, 176, 0.6); }
 #ship-meter.is-full #ship-meter-fill { animation: meter-glow 1.8s ease-in-out infinite; }
 
 #ship-meter-pct {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  min-width: 34px;
-  text-align: right;
-  opacity: 0.8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: var(--ink);
+  opacity: 0.95;
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes meter-glow {
-  0%, 100% { box-shadow: 0 0 12px rgba(111, 227, 255, 0.7); }
-  50% { box-shadow: 0 0 22px rgba(111, 227, 255, 1); }
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.4); }
 }
 
-/* Level countdown clock (top-left) */
+/* Level countdown clock (top-left, under the PLANETFALL title) */
 #countdown {
   position: absolute;
-  top: 26px;
+  top: 98px;
   left: 32px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 15px;
-  background: rgba(8, 14, 26, 0.55);
-  border: 1px solid rgba(111, 227, 255, 0.28);
-  border-radius: 8px;
+  gap: 11px;
+  padding: 8px 16px;
+  background: rgba(6, 11, 22, 0.78);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 9px;
   backdrop-filter: blur(8px);
   transition: border-color 0.3s ease, background 0.3s ease;
 }
 
 .cd-label {
-  font-size: 10px;
-  letter-spacing: 0.28em;
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  font-weight: 700;
   color: var(--accent);
-  opacity: 0.85;
+  opacity: 0.95;
 }
 
 #countdown-time {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--ink);
-  min-width: 48px;
+  min-width: 66px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -294,6 +319,164 @@ html, body {
 }
 
 /* Time-out fail screen */
+/* ---------- landing briefing modal ---------- */
+#briefing {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: auto;     /* #ui is pointer-events:none — re-enable for the modal */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 30%, rgba(20, 16, 44, 0.62), rgba(2, 4, 10, 0.86));
+  backdrop-filter: blur(7px);
+  animation: bf-fade 0.5s ease both;
+}
+#briefing.hidden { display: none; }
+
+@keyframes bf-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bf-card {
+  width: min(540px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 30px 34px 26px;
+  text-align: left;
+  background: var(--panel-bg);
+  border: 1px solid rgba(111, 227, 255, 0.28);
+  border-radius: 16px;
+  box-shadow: 0 26px 80px rgba(2, 4, 10, 0.7), 0 0 50px rgba(111, 227, 255, 0.12);
+  animation: bf-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bf-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.bf-tag {
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: var(--accent);
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+.bf-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.bf-story {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink);
+  opacity: 0.82;
+  margin-bottom: 20px;
+}
+.bf-mission {
+  border-top: 1px solid rgba(111, 227, 255, 0.16);
+  border-bottom: 1px solid rgba(111, 227, 255, 0.16);
+  padding: 16px 0;
+  margin-bottom: 18px;
+}
+.bf-mission-head {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--accent-warm);
+  margin-bottom: 12px;
+}
+.bf-steps {
+  list-style: none;
+  counter-reset: bf;
+  display: grid;
+  gap: 11px;
+}
+.bf-steps li {
+  counter-increment: bf;
+  position: relative;
+  padding-left: 34px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  opacity: 0.9;
+}
+.bf-steps li::before {
+  content: counter(bf);
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 50%;
+}
+.bf-steps code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(111, 227, 255, 0.1);
+  color: var(--accent);
+}
+.bf-steps strong { color: var(--ink); font-weight: 700; }
+.bf-warn {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #ff8a78;
+  opacity: 0.92;
+  margin-bottom: 22px;
+}
+#briefing-start {
+  display: block;
+  width: 100%;
+  padding: 13px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #04121a;
+  cursor: pointer;
+  background: linear-gradient(90deg, #3aa6c8, var(--accent));
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 0 26px rgba(111, 227, 255, 0.3);
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+#briefing-start:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 36px rgba(111, 227, 255, 0.5);
+}
+#briefing-start:active { transform: translateY(0); }
+.bf-hint {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  opacity: 0.6;
+}
+.bf-key {
+  display: inline-block;
+  padding: 2px 7px;
+  margin: 0 2px;
+  border: 1px solid rgba(255, 244, 232, 0.45);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 #level-fail {
   position: absolute;
   top: 50%;
@@ -344,7 +527,7 @@ html, body {
 /* Teaching line */
 #tutorial {
   position: absolute;
-  top: 74px;
+  top: 132px;
   left: 50%;
   transform: translateX(-50%);
   max-width: min(560px, calc(100vw - 48px));
@@ -493,17 +676,17 @@ html, body {
 }
 
 #term-hint {
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
-  color: var(--accent-warm);
-  opacity: 0.88;
-  margin-bottom: 9px;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  opacity: 0.68;
+  margin-bottom: 10px;
 }
 
 #term-line {
   display: flex;
   align-items: center;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 0.02em;
 }
 
@@ -515,6 +698,60 @@ html, body {
 
 #term-input { color: var(--ink); white-space: pre; }
 #term-input.is-dim { color: var(--accent-warm); opacity: 0.92; }
+
+/* Call-to-action: the actionable command/keys — the brightest thing here */
+#term-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 13px;
+}
+#term-cta:empty { display: none; }
+.cta-label {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: 0.9;
+}
+.cta-cmd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #04121a;
+  padding: 5px 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #6fe3ff, #9af0ff);
+  box-shadow: 0 0 18px rgba(111, 227, 255, 0.45);
+}
+.cta-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 6px;
+  color: #04121a;
+}
+.cta-key-yes {
+  background: linear-gradient(90deg, #6fe3ff, #9af0ff);
+  box-shadow: 0 0 14px rgba(111, 227, 255, 0.45);
+}
+.cta-key-no {
+  background: rgba(232, 244, 255, 0.16);
+  color: var(--ink);
+  border: 1px solid rgba(232, 244, 255, 0.3);
+}
+.cta-note {
+  font-size: 12.5px;
+  color: var(--ink);
+  opacity: 0.82;
+  margin-right: 8px;
+}
 
 /* `entire checkpoint list` output */
 #term-list:not(.hidden) {

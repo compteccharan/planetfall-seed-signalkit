@@ -53,15 +53,41 @@
       <div id="island-hud" class="hidden">
         <div id="crosshair" class="hidden"></div>
 
+        <!-- Landing briefing — shown on arrival; the clock waits for START -->
+        <div id="briefing" class="hidden">
+          <div class="bf-card">
+            <div class="bf-tag">SIGNAL LOST · LEVEL 1</div>
+            <h1 class="bf-title">First Memories</h1>
+            <p class="bf-story">
+              You've crash-landed on a lavender world. The impact scattered the
+              ship's memory across the island — each fragment a piece of what
+              happened here. Recover them before they're lost for good — restore
+              enough and the ship can take you home.
+            </p>
+            <div class="bf-mission">
+              <div class="bf-mission-head">YOUR MISSION</div>
+              <ol class="bf-steps">
+                <li>Walk up to a glowing memory — the ship's terminal opens.</li>
+                <li>Type <code>git add</code>, then <code>git commit</code> to freeze it in ice.</li>
+                <li>When Entire offers, press <code>y</code> to link a <strong>checkpoint</strong> — that's what restores it to the ship's memory.</li>
+                <li>Bank all three, then run <code>entire checkpoint list</code> before the clock hits <strong>0:00</strong>.</li>
+              </ol>
+            </div>
+            <p class="bf-warn">The countdown is short and the sky turns against you. Anything not banked in time melts away.</p>
+            <button id="briefing-start" type="button">LAND &amp; BEGIN</button>
+            <div class="bf-hint">or press <span class="bf-key">Enter</span></div>
+          </div>
+        </div>
+
         <!-- Level countdown — one clock for the whole run; bank all before 0:00 -->
         <div id="countdown">
           <span class="cd-label">TIME</span>
           <span id="countdown-time">0:45</span>
         </div>
 
-        <!-- Ship power meter — the level goal; only checkpoints fill it -->
+        <!-- Ship memory meter — the level goal; only checkpoints fill it -->
         <div id="ship-meter">
-          <span class="meter-label">SHIP POWER</span>
+          <span class="meter-label">SHIP MEMORY</span>
           <span class="meter-track"><span id="ship-meter-fill"></span></span>
           <span id="ship-meter-pct">0%</span>
         </div>
@@ -80,6 +106,7 @@
             <span class="term-prompt">crashlog:~$</span>
             <span id="term-input"></span><span class="term-cursor"></span>
           </div>
+          <div id="term-cta"></div>
           <div id="term-list" class="hidden"></div>
           <div id="term-msg"></div>
         </div>
@@ -93,7 +120,7 @@
             <span id="cc-attr-text"></span>
           </div>
           <div class="cc-trailer">commit trailer&nbsp;·&nbsp;Entire-Checkpoint: <span id="cc-id"></span></div>
-          <div class="cc-foot">+ banked to ship power</div>
+          <div class="cc-foot">+ restored to ship memory</div>
         </div>
 
         <!-- Time-out fail screen -->
