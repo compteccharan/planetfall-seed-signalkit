@@ -422,6 +422,28 @@ html, body {
   color: var(--accent);
 }
 .bf-steps strong { color: var(--ink); font-weight: 700; }
+.bf-controls {
+  margin-bottom: 18px;
+}
+.bf-ctrl-grid {
+  display: grid;
+  gap: 10px;
+}
+.bf-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  opacity: 0.9;
+}
+.bf-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+.bf-keys .bf-key { margin: 0; }
+.bf-dim { opacity: 0.55; }
+
 .bf-warn {
   font-size: 12.5px;
   line-height: 1.5;
