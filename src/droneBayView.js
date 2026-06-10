@@ -54,7 +54,7 @@ const SYSTEMS = [
     broken: "buildBrokenCoils", upgrade: "buildPlasmaRing",
     became: "Plasma Ring",
     card: [
-      ["drone", "drone-1"],
+      ["subagent", "subagent-1"],
       ["system", "ignition coils"],
       ["did", "coils beyond saving — rebuilt as a plasma ring from salvaged hull plate"],
       ["session", "2 attempts · parts scavenged: hull plate ×3"],
@@ -66,7 +66,7 @@ const SYSTEMS = [
     broken: "buildBrokenNav", upgrade: "buildStarDome",
     became: "Star Dome",
     card: [
-      ["drone", "drone-2"],
+      ["subagent", "subagent-2"],
       ["system", "nav core"],
       ["did", "core unrecoverable — remapped from scratch; starfield calibrated to the lavender belt"],
       ["session", "1 attempt · 412 stars plotted"],
@@ -78,7 +78,7 @@ const SYSTEMS = [
     broken: "buildBrokenDish", upgrade: "buildSignalSpire",
     became: "Signal Spire",
     card: [
-      ["drone", "drone-3"],
+      ["subagent", "subagent-3"],
       ["system", "long-range antenna"],
       ["did", "dish unsalvageable — respun the mast into a signal spire; relay handshake at full strength"],
       ["session", "3 attempts · the first two fell over"],
@@ -90,7 +90,7 @@ const SYSTEMS = [
     broken: "buildBrokenVent", upgrade: "buildGardenPod",
     became: "Garden Pod",
     card: [
-      ["drone", "drone-4"],
+      ["subagent", "subagent-4"],
       ["system", "life support scrubbers"],
       ["did", "filters dead — replaced with a living filter; two vines scavenged from the crash"],
       ["session", "1 attempt · the vines approved"],
@@ -102,7 +102,7 @@ const SYSTEMS = [
     broken: "buildBrokenStrut", upgrade: "buildGravSkid",
     became: "Grav Skid",
     card: [
-      ["drone", "drone-5"],
+      ["subagent", "subagent-5"],
       ["system", "landing struts"],
       ["did", "strut seized solid — swapped for grav skids; technically the ship floats now"],
       ["session", "2 attempts · torque spec: vibes"],
@@ -570,7 +570,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
         </span>
       ` : ""}
       <span class="control-item">
-        <span class="control-label">Send a drone</span>
+        <span class="control-label">Send a subagent</span>
         <span class="key">E</span>
       </span>
       <span class="control-item">
@@ -591,7 +591,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
 
   // ---------- systems status panel ----------
   const STATE_LABEL = {
-    broken: "BROKEN", working: "DRONE AT WORK", sealed: "READY TO REVIEW", added: "ONLINE",
+    broken: "BROKEN", working: "SUBAGENT AT WORK", sealed: "READY TO REVIEW", added: "ONLINE",
   };
   function updateSystems() {
     if (!systemsEl) return;
@@ -646,7 +646,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     timeLeft = TOTAL_TIME;
     timerRunning = true;
     updateClock();
-    showTutorial("Five systems are dark — the amber beams. Walk to one and press E: a drone takes the job while you move on.", 8500);
+    showTutorial("Five systems are dark — the amber beams. Walk to one and press E: a subagent takes the job while you move on.", 8500);
   }
   briefingStartBtn?.addEventListener("click", startLevel);
 
@@ -691,7 +691,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     timerRunning = true;
     updateClock();
     if (active) fp.attach();
-    showTutorial("New attempt — the fleet works in parallel. Use all five drones.", 6000);
+    showTutorial("New attempt — the fleet works in parallel. Use all five subagents.", 6000);
   }
 
   // ---------- drone dispatching ----------
@@ -708,7 +708,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     drone.dur = Math.max(1, drone.from.distanceTo(drone.to) / DRONE_SPEED);
     updateSystems();
     teachOnce("assigned",
-      "The drone's got it — you're free. Send the others while it works; the clock won't wait.", 7000);
+      "The subagent's got it — you're free. Send the others while it works; the clock won't wait.", 7000);
   }
   function sealSite(site) {
     site.state = "sealed";
@@ -719,7 +719,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     site.sprite.visible = true;
     updateSystems();
     teachOnce("sealed",
-      "A drone finished while you were away — its work is sealed under a checkpoint. Walk up and see what it actually did.", 8000);
+      "A subagent finished while you were away — its work is sealed under a checkpoint. Walk up and see what it actually did.", 8000);
   }
 
   // ---------- terminal ----------
@@ -736,7 +736,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     if (termMode === "review") {
       if (!explained) {
         // The command comes pre-filled — you never type a checkpoint id.
-        termHint.textContent = "# what did the drone actually do? ask the checkpoint";
+        termHint.textContent = "# what did the subagent actually do? ask the checkpoint";
         termInput.textContent = `entire checkpoint explain ${reviewSite.sys.ckpt}`;
         termInput.classList.remove("is-dim");
         if (termCta) termCta.innerHTML =
@@ -857,7 +857,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
           `<span class="tl-title">${s.sys.name.toLowerCase()} → ${s.sys.became} (${s.sys.ckpt.slice(0, 6)}…)</span></div>`
         ).join("") +
         `<div class="term-list-row"><span class="tl-key tl-exp-key">filed</span>` +
-        `<span class="tl-title">from 5 checkpoints · crew: 1 human, 5 drones</span></div>`;
+        `<span class="tl-title">from 5 checkpoints · crew: 1 human, 5 subagents</span></div>`;
       termList.classList.remove("hidden");
     }
     flashTerminal("dispatch sent — look how much got done without you", true);
@@ -881,7 +881,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
       if (termList) {
         termList.innerHTML = sites.map((s) =>
           `<div class="term-list-row"><span class="tl-id tl-id-short">${s.sys.ckpt}</span>` +
-          `<span class="tl-title">drone fix: ${s.sys.name.toLowerCase()} → ${s.sys.became}</span></div>`
+          `<span class="tl-title">subagent fix: ${s.sys.name.toLowerCase()} → ${s.sys.became}</span></div>`
         ).join("");
         termList.classList.remove("hidden");
       }
@@ -958,8 +958,8 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     if (!fp.isLocked) { setPrompt("Click to look around"); return; }
     if (reportSent) { setPrompt("The day is dispatched — press B to return to orbit"); return; }
     if (nearSite) {
-      if (nearSite.state === "broken") setPrompt(`${nearSite.sys.name} is down — press E to send a drone`);
-      else if (nearSite.state === "working") setPrompt("Drone at work — you're free, go assign another");
+      if (nearSite.state === "broken") setPrompt(`${nearSite.sys.name} is down — press E to send a subagent`);
+      else if (nearSite.state === "working") setPrompt("Subagent at work — you're free, go assign another");
       else if (nearSite.state === "added" && !allAdded()) setPrompt(`${nearSite.sys.became} online — accepted into the ship`);
       return;
     }
@@ -969,7 +969,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
       return;
     }
     if (sites.some((s) => s.state === "broken")) {
-      setPrompt("Amber beams are broken systems — send the drones (E)");
+      setPrompt("Amber beams are broken systems — send the subagents (E)");
       return;
     }
     setPrompt("The fleet is working — wait for an ice-blue beam, then go review");
@@ -1134,7 +1134,7 @@ export function createDroneBayView(renderer, { onExit } = {}) {
     } else {
       fp.attach();
       timerRunning = true;          // resume the level clock
-      showTutorial("The drones kept working while you were in orbit.", 5000);
+      showTutorial("The subagents kept working while you were in orbit.", 5000);
     }
     updateClock();
     applyPanicSky();
