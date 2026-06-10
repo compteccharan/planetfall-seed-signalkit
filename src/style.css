@@ -1639,3 +1639,52 @@ html, body {
   #lc-question { font-size: 13px; }
   .lc-opt { font-size: 11.5px; }
 }
+
+/* Ignition countdown — 3… 2… 1… IGNITION */
+#lc-ignition {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 110px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffe7b0;
+  text-shadow: 0 0 34px rgba(255, 210, 122, 0.85), 0 0 90px rgba(255, 210, 122, 0.4);
+  pointer-events: none;
+}
+#lc-ignition.hidden { display: none; }
+#lc-ignition.is-go {
+  font-size: 64px;
+  letter-spacing: 0.22em;
+  color: #fff6e6;
+}
+#lc-ignition.pop { animation: lc-pop 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes lc-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0.15; transform: translate(-50%, -50%) scale(0.92); }
+}
+
+/* The ignition flash — one bright gold breath over everything */
+#lc-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 62%,
+    rgba(255, 236, 190, 0.95), rgba(255, 210, 122, 0.55) 45%, rgba(255, 180, 90, 0) 75%);
+  opacity: 0;
+  pointer-events: none;
+}
+#lc-flash.show { animation: lc-flash 1.4s ease-out both; }
+@keyframes lc-flash {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 680px) {
+  #lc-ignition { font-size: 72px; }
+  #lc-ignition.is-go { font-size: 38px; }
+}

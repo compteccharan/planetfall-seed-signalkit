@@ -342,7 +342,7 @@ function makeConsole() {
   return g;
 }
 
-export function createDroneBayView(renderer, { onExit, onComplete } = {}) {
+export function createDroneBayView(renderer, { onExit, onComplete, onNext } = {}) {
   const canvas = renderer.domElement;
 
   // ---------- scene & sky ----------
@@ -945,6 +945,8 @@ export function createDroneBayView(renderer, { onExit, onComplete } = {}) {
     }
 
     // Walking around.
+    // Level cleared → Enter boards the ship; failure never advances (R only).
+    if (reportSent && e.code === "Enter") { onNext?.(); e.preventDefault(); return; }
     if (e.code === "KeyE" && nearSite?.state === "broken") { assignDrone(nearSite); e.preventDefault(); return; }
     if (e.code === "KeyM") { setMap(!overhead.on); e.preventDefault(); return; }
     if (e.code === "Escape" && fp.isLocked) fp.unlock();
@@ -966,7 +968,7 @@ export function createDroneBayView(renderer, { onExit, onComplete } = {}) {
     setControls(fp.isLocked);
     if (overhead.on) { setPrompt("Bird's-eye view — ↑↓←→ to move · M to return"); return; }
     if (!fp.isLocked) { setPrompt("Click to look around"); return; }
-    if (reportSent) { setPrompt("The day is dispatched — press B to return to orbit"); return; }
+    if (reportSent) { setPrompt("The day is dispatched — press Enter to board the ship"); return; }
     if (nearSite) {
       if (nearSite.state === "broken") setPrompt(`${nearSite.sys.name} is down — press E to send a subagent`);
       else if (nearSite.state === "working") setPrompt("Subagent at work — you're free, go assign another");

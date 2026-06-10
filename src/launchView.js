@@ -27,6 +27,7 @@ const LOW_TIME = 45;         // clock turns urgent under this
 const CRIT_TIME = 15;        // clock goes CRITICAL under this
 const PANIC_TIME = 45;       // the SKY starts shifting toward panic-red
 const NEXT_DELAY = 1.6;      // seconds between a confirm and the next question
+const IGN_DUR = 3;           // seconds of 3-2-1 before ignition
 const LIFT_DUR = 9;          // seconds of liftoff before the win screen
 
 // Sky palette — calm/panic as in L1/L2, plus the space we lift into.
@@ -305,6 +306,57 @@ export function createLaunchView(renderer, { onExit } = {}) {
   cabinLight.position.set(0, 0.2, -0.6);
   camera.add(cabinLight);
 
+  // Fireworks for the climb out — gold and lavender bursts the island sends
+  // up past the window. A small recycled pool of Points clouds.
+  const bursts = Array.from({ length: 6 }, () => {
+    const n = 70;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xffd27a, size: 1.7, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.visible = false;
+    scene.add(pts);
+    return { pts, vel: new Float32Array(n * 3), t: 0, dur: 1.7, active: false };
+  });
+  function fireBurst(b) {
+    b.active = true;
+    b.t = 0;
+    b.pts.material.color.setHex(Math.random() < 0.55 ? 0xffd27a : 0xcdbcff);
+    // Scatter around / below the window so they whoosh past as the ship climbs.
+    const cx = rig.position.x + (Math.random() - 0.5) * 140;
+    const cy = rig.position.y - 8 + (Math.random() - 0.5) * 60;
+    const cz = rig.position.z - 50 - Math.random() * 90;
+    const pos = b.pts.geometry.attributes.position.array;
+    for (let i = 0; i < pos.length; i += 3) {
+      pos[i] = cx; pos[i + 1] = cy; pos[i + 2] = cz;
+      const v = new THREE.Vector3().randomDirection().multiplyScalar(9 + Math.random() * 15);
+      b.vel[i] = v.x; b.vel[i + 1] = v.y; b.vel[i + 2] = v.z;
+    }
+    b.pts.geometry.attributes.position.needsUpdate = true;
+    b.pts.visible = true;
+  }
+  function updateBursts(dt) {
+    for (const b of bursts) {
+      if (!b.active) continue;
+      b.t += dt;
+      if (b.t >= b.dur) { b.active = false; b.pts.visible = false; continue; }
+      const pos = b.pts.geometry.attributes.position.array;
+      for (let i = 0; i < pos.length; i += 3) {
+        pos[i] += b.vel[i] * dt;
+        pos[i + 1] += (b.vel[i + 1] -= 5 * dt) * dt;
+        pos[i + 2] += b.vel[i + 2] * dt;
+      }
+      b.pts.geometry.attributes.position.needsUpdate = true;
+      b.pts.material.opacity = 0.95 * (1 - b.t / b.dur);
+    }
+  }
+  function resetBursts() {
+    for (const b of bursts) { b.active = false; b.pts.visible = false; b.pts.material.opacity = 0; }
+  }
+
   // Stars for the climb out — invisible until the sky turns to space.
   const starGeo = new THREE.BufferGeometry();
   const starPts = new Float32Array(700 * 3);
@@ -335,6 +387,8 @@ export function createLaunchView(renderer, { onExit } = {}) {
   const outputEl = document.getElementById("lc-output");
   const answersEl = document.getElementById("lc-answers");
   const msgEl = document.getElementById("lc-msg");
+  const ignitionEl = document.getElementById("lc-ignition");
+  const flashEl = document.getElementById("lc-flash");
   const winEl = document.getElementById("lc-win");
   const winSub = document.getElementById("lc-win-sub");
   const failEl = document.getElementById("lc-fail");
@@ -342,9 +396,13 @@ export function createLaunchView(renderer, { onExit } = {}) {
   let active = false;
   let started = false;
   let failed = false;
+  let igniting = false;        // the 3-2-1 — rumble building
+  let ignT = 0;
+  let ignTick = -1;            // which number is on screen (re-pops the CSS)
   let launched = false;        // ignition — the climb-out is running
   let won = false;
   let liftT = 0;
+  let burstTimer = 0;
   let qIndex = 0;
   let phase = "menu";          // menu → chips → done (or "single" on the finale)
   let usedTool = null;         // which menu row ran (for dimming)
@@ -506,12 +564,33 @@ export function createLaunchView(renderer, { onExit } = {}) {
     flashMsg("flight log filed — ignition", true);
     timerRunning = false;
     countdownEl?.classList.remove("is-low", "is-critical");
+    // The island salutes: every system's beam fires at full power.
     for (const s of sites) { s.confirmed = true; s.beam.visible = true; s.flareT = 0; }
     nextTimer = setTimeout(() => {
-      launched = true;
-      liftT = 0;
       consoleEl?.classList.add("hidden");
-    }, 2200);
+      igniting = true;
+      ignT = 0;
+      ignTick = -1;
+    }, 1400);
+  }
+  function setIgnitionText(text, big) {
+    if (!ignitionEl) return;
+    ignitionEl.textContent = text;
+    ignitionEl.classList.remove("hidden", "pop", "is-go");
+    void ignitionEl.offsetWidth;          // restart the pop animation
+    ignitionEl.classList.add("pop");
+    if (big) ignitionEl.classList.add("is-go");
+  }
+  function igniteNow() {
+    igniting = false;
+    launched = true;
+    liftT = 0;
+    burstTimer = 0.2;
+    setIgnitionText("IGNITION", true);
+    flashEl?.classList.remove("show");
+    void flashEl?.offsetWidth;
+    flashEl?.classList.add("show");
+    setTimeout(() => ignitionEl?.classList.add("hidden"), 1300);
   }
 
   // ---------- clock / sky ----------
@@ -581,9 +660,16 @@ export function createLaunchView(renderer, { onExit } = {}) {
   }
   function resetLevel() {
     failed = false;
+    igniting = false;
+    ignT = 0;
+    ignTick = -1;
     launched = false;
     won = false;
     liftT = 0;
+    burstTimer = 0;
+    resetBursts();
+    ignitionEl?.classList.add("hidden");
+    flashEl?.classList.remove("show");
     qIndex = 0;
     phase = "menu";
     usedTool = null;
@@ -624,7 +710,7 @@ export function createLaunchView(renderer, { onExit } = {}) {
       if (e.code === "KeyR") { resetLevel(); e.preventDefault(); }
       return;
     }
-    if (won || launched) {
+    if (won || launched || igniting) {
       if (won && e.code === "KeyB") onExit?.();
       return;
     }
@@ -671,28 +757,51 @@ export function createLaunchView(renderer, { onExit } = {}) {
       } else if (anim?.type === "skid") {
         anim.pad.position.y = 1.6 + Math.sin(t * 1.8) * 0.25;
       }
-      // Gold confirm flare: quick bloom, then settles to a steady glow.
+      // Gold confirm flare: quick bloom, then settles to a steady glow —
+      // and a full-power salute from every beam once the engines are lit.
       if (s.confirmed) {
         s.flareT += dt;
         const settle = 0.28 + Math.sin(t * 2.2 + s.idx) * 0.04;
         const bloom = Math.max(0, 1 - s.flareT / 2.5) * 0.5;
-        s.beam.material.opacity = settle + bloom;
+        const salute = (igniting || launched) ? 0.45 + Math.sin(t * 7 + s.idx) * 0.15 : 0;
+        s.beam.material.opacity = Math.min(1, settle + bloom + salute);
       }
     }
 
-    if (launched && !won) {
-      // Ignition: the island falls away, the sky becomes space.
+    if (igniting) {
+      // 3… 2… 1… — the rumble builds with the count.
+      ignT += dt;
+      const tick = Math.floor(ignT);
+      if (tick !== ignTick && tick < IGN_DUR) {
+        ignTick = tick;
+        setIgnitionText(String(IGN_DUR - tick), false);
+      }
+      const amp = 0.0015 + (ignT / IGN_DUR) * 0.006;
+      camera.rotation.x = baseRotX + (Math.random() - 0.5) * amp;
+      camera.rotation.y = baseRotY + (Math.random() - 0.5) * amp;
+      if (ignT >= IGN_DUR) igniteNow();
+    } else if (launched && !won) {
+      // Liftoff: the island falls away, the sky becomes space, the island
+      // cheers — fireworks streaming past the window.
       liftT += dt;
       const v = Math.min(46, 6 + liftT * 9);
       rig.position.y += v * dt;
-      camera.rotation.x = baseRotX - Math.min(0.5, liftT * 0.07);
+      const rumble = Math.max(0, 1 - liftT / 3) * 0.006;
+      camera.rotation.x = baseRotX - Math.min(0.5, liftT * 0.07) + (Math.random() - 0.5) * rumble;
+      camera.rotation.y = baseRotY + (Math.random() - 0.5) * rumble;
       camera.rotation.z = Math.sin(t * 1.3) * 0.004;
       scene.fog.far = Math.min(2200, 420 + liftT * 320);
       sun.intensity = Math.max(0.6, 1.5 - liftT * 0.1);
+      burstTimer -= dt;
+      if (burstTimer <= 0 && liftT < LIFT_DUR - 1.5) {
+        const idle = bursts.find((b) => !b.active);
+        if (idle) fireBurst(idle);
+        burstTimer = 0.45 + Math.random() * 0.5;
+      }
       if (liftT >= LIFT_DUR) {
         won = true;
         if (winSub) winSub.textContent =
-          `${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · 0 guesses`;
+          `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · 0 guesses`;
         winEl?.classList.remove("hidden");
       }
     } else if (!failed && !won) {
@@ -700,6 +809,7 @@ export function createLaunchView(renderer, { onExit } = {}) {
       camera.rotation.x = baseRotX + Math.sin(t * 0.7) * 0.006;
       camera.rotation.y = baseRotY + Math.sin(t * 0.45) * 0.008;
     }
+    updateBursts(dt);
   }
 
   // ---------- lifecycle ----------
@@ -729,6 +839,8 @@ export function createLaunchView(renderer, { onExit } = {}) {
     hud?.classList.add("hidden");
     briefingEl?.classList.add("hidden");
     consoleEl?.classList.add("hidden");
+    ignitionEl?.classList.add("hidden");
+    flashEl?.classList.remove("show");
     winEl?.classList.add("hidden");
     failEl?.classList.add("hidden");
   }

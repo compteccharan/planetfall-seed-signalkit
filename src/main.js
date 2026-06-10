@@ -108,13 +108,16 @@ const planetView = createPlanetView(renderer, {
     level2Done ? launchView : level1Done ? droneBayView : islandView
   ),
 });
+// Success carries you forward (onNext); failure only ever offers R to retry.
 const islandView = createIslandView(renderer, {
   onExit: () => switchTo(planetView),
   onComplete: () => { level1Done = true; },
+  onNext: () => switchTo(droneBayView),
 });
 const droneBayView = createDroneBayView(renderer, {
   onExit: () => switchTo(planetView),
   onComplete: () => { level2Done = true; },
+  onNext: () => switchTo(launchView),
 });
 const archiveView = createArchiveView(renderer, {
   onExit: () => switchTo(planetView),

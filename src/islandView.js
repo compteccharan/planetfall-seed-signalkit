@@ -68,7 +68,7 @@ function cmdMatches(input, accepts) {
   return accepts.some((a) => n === a || n.startsWith(a + " "));
 }
 
-export function createIslandView(renderer, { onExit, onComplete, devStartLevel = 1 } = {}) {
+export function createIslandView(renderer, { onExit, onComplete, onNext, devStartLevel = 1 } = {}) {
   const canvas = renderer.domElement;
   const devLevel2 = devStartLevel === 2;
 
@@ -541,7 +541,7 @@ export function createIslandView(renderer, { onExit, onComplete, devStartLevel =
       ).join("");
     }
     flashTerminal(`${artifacts.length} checkpoints linked · ship memory restored`, true);
-    showTutorial("Memory restored — the ship knows the way home. Press Esc to close the terminal, then B to return to orbit.", 0);
+    showTutorial("Memory restored — and something just woke up. Press Esc to close the terminal, then Enter to investigate.", 0);
     renderTerminal();
     onComplete?.();                  // Level 1 cleared — unlocks Level 2 in orbit
   }
@@ -657,6 +657,8 @@ export function createIslandView(renderer, { onExit, onComplete, devStartLevel =
     }
 
     // Walking around (terminal closed).
+    // Level cleared → Enter carries you forward; failure never does (R only).
+    if (listShown && e.code === "Enter") { onNext?.(); e.preventDefault(); return; }
     if (e.code === "KeyM") { setMap(!overhead.on); e.preventDefault(); return; }
     if (e.code === "Escape" && fp.isLocked) fp.unlock();
     if (e.code === "KeyB") onExit?.();
@@ -680,7 +682,7 @@ export function createIslandView(renderer, { onExit, onComplete, devStartLevel =
       return;
     }
     if (!fp.isLocked) { setPrompt("Click to look around"); return; }
-    if (listShown) { setPrompt("Memory restored — press B to return to orbit"); return; }
+    if (listShown) { setPrompt("Memory restored — a new signal woke the drone bay. Enter to investigate · B for orbit"); return; }
     setPrompt("Find the surfacing memory");
   }
 
@@ -775,7 +777,7 @@ export function createIslandView(renderer, { onExit, onComplete, devStartLevel =
     } else if (listShown) {         // truly done — the list has been run
       fp.attach();
       timerRunning = false;
-      showTutorial("Memory restored — press B to return to orbit.", 0);
+      showTutorial("Memory restored — press Enter to answer the new signal, or B for orbit.", 0);
     } else if (failed) {
       resetLevel();                 // came back after a wipe → fresh run
     } else {
