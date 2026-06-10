@@ -262,12 +262,18 @@ seal + floating checkpoint id = finished, review me → no beam = accepted
 (the upgrade itself is the landmark; ice melts, animations wake up).
 
 ### The teaching, felt not told
-Delegation is cheap and parallel; review is the human bottleneck — and every
-checkpoint carries the story of work you didn't watch. Arc: L1 — bank it.
-L2 — delegate & review it, then dispatch the day (explain is the level's one
-taught mechanic; dispatch is a ceremonial closer with nothing to learn, the
-same role `list` played in L1). Search/rewind/recap reserved for later
-levels, by which point the checkpoint history will have grown naturally.
+What the level actually shows (Rizel's framing, 2026-06-10 — keep it this
+way): **you can have multiple agents working in parallel, see what work each
+one did, and get a summary at the end.** Sending a drone (E) is one button —
+delegation is demonstrated as spectacle, not taught; ADD TO SHIP is just the
+gate that makes reading the explanation non-skippable. The two things the
+player genuinely learns are the commands: `entire checkpoint explain` (see
+what an agent did while you weren't watching — the level's one taught
+mechanic) and `entire dispatch` (the day, summarized — a ceremonial closer
+with nothing to learn, the role `list` played in L1). Arc: L1 — bank it.
+L2 — agents work, you can always see and summarize what they did.
+Search/rewind/recap reserved for later levels, by which point the checkpoint
+history will have grown naturally.
 
 ### Implementation (2026-06-10)
 Lives in `src/droneBayView.js`; HUD block `#db-hud` in `index.html`; styles
