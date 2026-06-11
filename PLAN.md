@@ -480,6 +480,26 @@ completes, and the `?view=level2` / `?level=2` dev shortcuts). Specifics:
 - One 90s countdown (tunable `TOTAL_TIME`), same panic-sky as L1, fail = R to
   retry, win = "ARCHIVE LINKED" + B to orbit.
 
+## Title screen (built 2026-06-11)
+
+Borrowed from Mona's Bug Bash (bug-bash.github.com — Rizel's simplicity bar):
+the game boots to an arcade menu over the live orbit view (the planet is the
+attract backdrop). START GAME / OPTIONS; Options holds CONTROLS (the full
+key list, all three levels) and SOUND (music ON/OFF + volume — driven through
+the existing #audio-panel controls so the two can never disagree). ↑/↓ +
+Enter / Esc-back navigation with a ▸ cursor; mouse hover/click also works.
+Lives in `src/titleScreen.js` + `#title-screen` in `index.html`; shown only on
+a clean boot — `?view=` / `?level=` dev shortcuts skip it. While it's up, a
+`body.title-up` class hides the in-game chrome (small logo, hint, audio
+panel, pin). A nice side effect: the first menu interaction is the user
+gesture that unblocks music autoplay — the "press start" beat is real.
+
+Still on the Bug Bash-inspired list (discussed 2026-06-11, not yet built):
+ship-AI dialogue beats replacing the briefing walls (one goal sentence + one
+controls line, Space to advance), and a CRT skin scoped to the terminal only
+(scanlines/flicker as diegetic ship hardware — NOT a whole-page filter; the
+flat lavender look stays).
+
 ## Architecture / where things live
 
 ```
@@ -488,6 +508,8 @@ src/style.css      # HUD / panel / loader / fade / crosshair / FP-prompt styling
 src/main.js        # VIEW MANAGER: owns renderer + resize + shared panel + the
                    #   render loop; crossfades between the two views.
                    #   ?view=island jumps straight onto the island (dev aid).
+src/titleScreen.js # arcade boot menu (START GAME / OPTIONS > controls, sound)
+                   #   over the orbit view; clean boots only, dev URLs skip it.
 src/planetView.js  # orbit view: scene/lighting/stars/planet/clouds/atmo/ring +
                    #   the clickable gold landing hotspot. onIslandClick callback.
 src/islandView.js  # LEVEL 1: sky/light, terrain+water, the memories, terminal

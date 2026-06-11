@@ -43,6 +43,10 @@ Development shortcuts:
 
 ## How To Play
 
+The game boots to a title screen over the orbiting planet — **Start Game**, or
+**Options** for the controls list and sound (music on/off + volume). Navigate
+with ↑/↓ + `Enter` (`Esc` backs out) or the mouse.
+
 Orbit view:
 
 - Drag to orbit the planet, scroll to zoom, click the island pin to land.

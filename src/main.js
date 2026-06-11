@@ -4,6 +4,7 @@ import { createIslandView } from "./islandView.js";
 import { createDroneBayView } from "./droneBayView.js";
 import { createArchiveView } from "./archiveView.js";
 import { createLaunchView } from "./launchView.js";
+import { createTitleScreen } from "./titleScreen.js";
 
 const canvas = document.getElementById("scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -134,6 +135,11 @@ let current = requestedView === "island" ? islandView
   : jumpToLevel3 ? launchView
   : jumpToLevel2 ? droneBayView : planetView;
 current.enter();
+
+// Title screen on a clean boot only — the dev shortcuts skip straight in.
+// While it's up the orbit view runs behind it as the attract backdrop.
+const titleScreen = createTitleScreen();
+if (!requestedView && !params.get("level")) titleScreen.show();
 
 // ---------- fade transition ----------
 const fade = document.getElementById("fade");

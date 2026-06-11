@@ -60,6 +60,159 @@ html, body {
   white-space: nowrap;
 }
 
+/* ---------- title screen (arcade boot menu) ---------- */
+
+/* The orbit view keeps rendering behind it — only a soft vignette for
+   legibility, so the planet stays the attract backdrop. */
+#title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  background: radial-gradient(ellipse at 50% 44%, rgba(2, 4, 10, 0.55), rgba(2, 4, 10, 0.85));
+  transition: opacity 0.6s ease;
+}
+#title-screen.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+#title-screen.hidden { display: none; }
+
+/* While the title is up, the in-game chrome stays out of the shot. */
+body.title-up #hud,
+body.title-up #hint,
+body.title-up #audio-panel,
+body.title-up #island-pin { display: none !important; }
+
+.ts-logo {
+  font-size: clamp(40px, 7vw, 66px);
+  letter-spacing: 0.42em;
+  margin-right: -0.42em; /* optical centering: tracking pads the right edge */
+  font-weight: 600;
+  text-shadow: 0 2px 14px rgba(2, 4, 10, 0.95),
+    0 0 28px rgba(111, 227, 255, 0.65), 0 0 80px rgba(111, 227, 255, 0.25);
+}
+
+.ts-tag {
+  margin-top: 16px;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  margin-right: -0.3em;
+  opacity: 0.8;
+  text-shadow: 0 1px 8px rgba(2, 4, 10, 0.95);
+}
+
+.ts-menu {
+  margin-top: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ts-item {
+  position: relative;
+  padding: 7px 26px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  color: var(--ink);
+  opacity: 0.85;
+  cursor: pointer;
+  text-shadow: 0 1px 8px rgba(2, 4, 10, 0.95);
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.ts-item.is-selected {
+  color: var(--accent);
+  opacity: 1;
+  text-shadow: 0 1px 8px rgba(2, 4, 10, 0.95), 0 0 16px rgba(111, 227, 255, 0.55);
+  outline: none;
+}
+.ts-item.is-selected::before {
+  content: "▸";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.ts-item:focus-visible { outline: none; }
+
+/* Options panels (controls list, sound) */
+.ts-panel {
+  margin-top: 42px;
+  width: min(440px, 92vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 22px 26px 16px;
+  background: var(--panel-bg);
+  border: 1px solid rgba(111, 227, 255, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 26px 80px rgba(2, 4, 10, 0.6), 0 0 40px rgba(111, 227, 255, 0.1);
+  backdrop-filter: blur(7px);
+}
+.ts-group + .ts-group { margin-top: 16px; }
+.ts-group-head {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 700;
+  color: var(--accent-warm);
+  margin-bottom: 10px;
+}
+.ts-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  opacity: 0.9;
+}
+.ts-panel .ts-item {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+}
+.ts-panel-back {
+  display: block;
+  margin: 14px auto 0;
+}
+
+/* Sound rows: MUSIC ··· ON / VOLUME [slider] 55% */
+.ts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 9px 12px 9px 22px;
+  text-align: left;
+}
+.ts-value {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ts-value.is-off { color: var(--accent-warm); }
+#ts-volume {
+  width: 140px;
+  margin-left: auto;
+  accent-color: var(--accent-warm);
+  cursor: pointer;
+}
+#ts-volume-pct { min-width: 44px; text-align: right; }
+
+@media (max-width: 680px) {
+  .ts-menu { margin-top: 38px; }
+  .ts-panel { max-height: 54vh; padding: 16px 18px 12px; }
+}
+
 /* Background music controls */
 #audio-panel {
   position: absolute;
