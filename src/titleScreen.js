@@ -2,15 +2,35 @@
 // load. START GAME dismisses it; OPTIONS holds CONTROLS and SOUND. Sound
 // drives the existing #audio-panel controls (the canonical music state) so
 // this menu and the in-game panel can never disagree.
+// The opening story — an unnamed storybook narrator (the Bug Bash register):
+// third person about the world, then the last beat turns to the player with
+// the goal. Plain words on purpose; no idioms, no jargon.
+const STORY_BEATS = [
+  "The old world was built for people who write code. It saved every line, forever.",
+  "Then the way we build changed. Now humans and AI agents build together. You love working this way.",
+  "But the old world was made for humans only. There was not enough space for everyone. So you left for a new world — in your own spaceship, with your five subagent friends.",
+  "On the way, the ship broke down and crashed on a strange planet. The pieces that keep it running fell out, scattered across an island.",
+  "Bring the pieces back. Wake your friends. Fix the ship — and fly again.",
+];
+
 export function createTitleScreen({ onStart } = {}) {
   const root = document.getElementById("title-screen");
   const screens = {
     main: document.getElementById("ts-main"),
     options: document.getElementById("ts-options"),
     controls: document.getElementById("ts-controls"),
+    display: document.getElementById("ts-display"),
     sound: document.getElementById("ts-sound"),
   };
-  const parentOf = { options: "main", controls: "options", sound: "options" };
+  const parentOf = {
+    options: "main",
+    controls: "options",
+    display: "options",
+    sound: "options",
+  };
+  const story = document.getElementById("ts-story");
+  const storyText = document.getElementById("ts-story-text");
+  const storyNext = document.getElementById("ts-story-next");
 
   const bgm = document.getElementById("bgm");
   const audioToggle = document.getElementById("audio-toggle");
@@ -18,11 +38,31 @@ export function createTitleScreen({ onStart } = {}) {
   const musicState = document.getElementById("ts-music-state");
   const volume = document.getElementById("ts-volume");
   const volumePct = document.getElementById("ts-volume-pct");
+  const tvState = document.getElementById("ts-tv-state");
+
+  // The TV effect (scanlines + vignette) is on by default; the choice is
+  // remembered between visits.
+  const TV_KEY = "pf-tv-effect";
+  document.body.classList.toggle("tv-on", localStorage.getItem(TV_KEY) !== "off");
+
+  function syncDisplay() {
+    const on = document.body.classList.contains("tv-on");
+    tvState.textContent = on ? "ON" : "OFF";
+    tvState.classList.toggle("is-off", !on);
+  }
+
+  function toggleTv() {
+    const on = !document.body.classList.contains("tv-on");
+    document.body.classList.toggle("tv-on", on);
+    localStorage.setItem(TV_KEY, on ? "on" : "off");
+    syncDisplay();
+  }
 
   let active = false;
   let screenName = "main";
   let items = [];
   let sel = 0;
+  let storyBeat = -1; // -1 = not in the story; otherwise index into STORY_BEATS
 
   function syncSound() {
     if (!bgm) return;
@@ -70,25 +110,66 @@ export function createTitleScreen({ onStart } = {}) {
     items = [...screens[name].querySelectorAll(".ts-item")];
     setSel(0);
     if (name === "sound") syncSound();
+    if (name === "display") syncDisplay();
   }
 
   function back() {
     if (parentOf[screenName]) setScreen(parentOf[screenName]);
   }
 
+  function startStory() {
+    storyBeat = -1;
+    root.classList.add("is-story");
+    for (const el of Object.values(screens)) el.classList.add("hidden");
+    story.classList.remove("hidden");
+    nextBeat();
+  }
+
+  function nextBeat() {
+    storyBeat += 1;
+    if (storyBeat >= STORY_BEATS.length) {
+      finishStory();
+      return;
+    }
+    storyText.textContent = STORY_BEATS[storyBeat];
+    storyNext.textContent = storyBeat === STORY_BEATS.length - 1 ? "▸ BEGIN" : "▸";
+    // retrigger the fade-in for each beat
+    storyText.classList.remove("beat-in");
+    void storyText.offsetWidth;
+    storyText.classList.add("beat-in");
+  }
+
+  function finishStory() {
+    storyBeat = -1;
+    story.classList.add("hidden");
+    root.classList.remove("is-story");
+    hide();
+    onStart?.();
+  }
+
   function activate(el) {
     switch (el?.dataset.action) {
-      case "start": hide(); onStart?.(); break;
+      case "start": startStory(); break;
       case "options": setScreen("options"); break;
       case "controls": setScreen("controls"); break;
+      case "display": setScreen("display"); break;
       case "sound": setScreen("sound"); break;
       case "music-toggle": toggleMusic(); break;
+      case "tv-toggle": toggleTv(); break;
       case "back": back(); break;
     }
   }
 
   function onKey(e) {
     if (!active) return;
+    if (storyBeat >= 0) {
+      // in the story: Space/Enter advance, Esc skips straight to the game
+      if (e.key === " " || e.key === "Enter") nextBeat();
+      else if (e.key === "Escape") finishStory();
+      else return;
+      e.preventDefault();
+      return;
+    }
     const item = items[sel];
     const onVolume = item?.dataset.action === "volume";
     switch (e.key) {
@@ -123,10 +204,15 @@ export function createTitleScreen({ onStart } = {}) {
     });
   }
   volume?.addEventListener("input", () => setVolume(Number(volume.value)));
+  story.addEventListener("click", () => {
+    if (storyBeat >= 0) nextBeat();
+  });
 
   function show() {
     active = true;
-    root.classList.remove("hidden", "is-leaving");
+    storyBeat = -1;
+    story.classList.add("hidden");
+    root.classList.remove("hidden", "is-leaving", "is-story");
     document.body.classList.add("title-up");
     setScreen("main");
     syncSound();

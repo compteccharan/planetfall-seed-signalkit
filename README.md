@@ -44,8 +44,11 @@ Development shortcuts:
 ## How To Play
 
 The game boots to a title screen over the orbiting planet — **Start Game**, or
-**Options** for the controls list and sound (music on/off + volume). Navigate
-with ↑/↓ + `Enter` (`Esc` backs out) or the mouse.
+**Options** for the controls list, sound (music on/off + volume), and display
+(the TV effect — scanlines + vignette, on by default, remembered between
+visits). Navigate with ↑/↓ + `Enter` (`Esc` backs out) or the mouse. Start
+Game plays a short story intro (`Space` or click to advance, `Esc` to skip),
+then drops you into orbit.
 
 Orbit view:
 

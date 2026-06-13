@@ -494,11 +494,48 @@ a clean boot — `?view=` / `?level=` dev shortcuts skip it. While it's up, a
 panel, pin). A nice side effect: the first menu interaction is the user
 gesture that unblocks music autoplay — the "press start" beat is real.
 
+### Story intro (added 2026-06-11, story agreed with Rizel the same day)
+START GAME plays 5 narrator beats in a Bug Bash-style box over the planet
+(Space/Enter/click advance, Esc skips, last beat cues "BEGIN"), then drops
+into orbit. The story (`STORY_BEATS` in titleScreen.js): the old world saved
+every line of code but was made for humans only — no space for everyone now
+that humans and AI agents build together — so you left for a new world in
+your own spaceship with your five subagent friends; the ship broke down and
+crashed, and the pieces that keep it running scattered across an island;
+bring the pieces back, wake your friends, fix the ship, fly again.
+
+Story rules agreed with Rizel (keep these):
+- **Unnamed storybook narrator** (the Bug Bash voice) — nobody in-fiction
+  narrates. NO "ship's AI" as a character; the L3 questioner is just the
+  launch computer doing what launch computers do.
+- **The player's memory is fine.** "You weren't there — your checkpoints
+  were" requires it; amnesia would weaken the pitch. The crash scattered the
+  ship's parts (L1 reveals they're its memory) — nothing was "wiped".
+- **The old world is outgrown, never bad** — a size problem ("not enough
+  space for everyone"), not a feature gap. Never name any real-world tool.
+- **Plain language for non-native speakers**: short sentences, common words,
+  no idioms or sci-fi jargon ("the jump went wrong" was rejected). Pending:
+  the same pass over the level briefings; "bank" is load-bearing teaching
+  vocabulary — keep it but introduce it gently.
+- The player is a fan of agent-human collaboration; the L2 drones are "your
+  five subagent friends" who crashed with you (briefing copy not yet
+  re-tinted — pending).
+
+### The TV look (decided 2026-06-12)
+Scanlines + vignette over the whole screen, **on by default**, toggled at
+Options > Display > TV EFFECT (remembered in localStorage, key
+`pf-tv-effect`). Pure CSS overlay (`#tv-overlay`, body class `tv-on`),
+pointer-events off, game plays identically. Tried and REJECTED on the way
+(2026-06-12, don't re-tread): the Bug Bash-style inset screen / bezel border
+("i dont think i like the border"), an RGB aperture-grille layer (invisible
+at distance, just dims), and a rolling bright band (competes with the
+countdown/panic-sky urgency signals during play). This is the one permanent
+texture allowed over the flat look — a film-grain decision, not a graphics
+overhaul; nothing else gets layered on without asking.
+
 Still on the Bug Bash-inspired list (discussed 2026-06-11, not yet built):
-ship-AI dialogue beats replacing the briefing walls (one goal sentence + one
-controls line, Space to advance), and a CRT skin scoped to the terminal only
-(scanlines/flicker as diegetic ship hardware — NOT a whole-page filter; the
-flat lavender look stays).
+ship-AI-free narrator beats replacing the briefing walls (one goal sentence +
+one controls line, Space to advance).
 
 ## Architecture / where things live
 

@@ -29,6 +29,7 @@
         <div id="ts-options" class="ts-menu hidden">
           <button class="ts-item" type="button" data-action="controls">CONTROLS</button>
           <button class="ts-item" type="button" data-action="sound">SOUND</button>
+          <button class="ts-item" type="button" data-action="display">DISPLAY</button>
           <button class="ts-item" type="button" data-action="back">BACK</button>
         </div>
 
@@ -56,6 +57,14 @@
           <button class="ts-item ts-panel-back" type="button" data-action="back">BACK</button>
         </div>
 
+        <div id="ts-display" class="ts-panel hidden">
+          <div class="ts-group-head">DISPLAY</div>
+          <button class="ts-item ts-row" type="button" data-action="tv-toggle">
+            TV EFFECT <span id="ts-tv-state" class="ts-value">ON</span>
+          </button>
+          <button class="ts-item ts-panel-back" type="button" data-action="back">BACK</button>
+        </div>
+
         <div id="ts-sound" class="ts-panel hidden">
           <div class="ts-group-head">SOUND</div>
           <button class="ts-item ts-row" type="button" data-action="music-toggle">
@@ -67,6 +76,14 @@
             <span id="ts-volume-pct" class="ts-value">55%</span>
           </div>
           <button class="ts-item ts-panel-back" type="button" data-action="back">BACK</button>
+        </div>
+
+        <!-- Story intro — narrator beats after START GAME, Space to advance -->
+        <div id="ts-story" class="hidden">
+          <div class="ts-story-box">
+            <div id="ts-story-text"></div>
+            <div class="ts-story-cue"><span class="bf-key">Space</span> <span id="ts-story-next">▸</span></div>
+          </div>
         </div>
       </div>
 
@@ -456,6 +473,12 @@
           <div class="lf-hint">press <span class="lf-key">R</span> to try again</div>
         </div>
       </div>
+    </div>
+
+    <!-- The TV look: scanlines + vignette, on by default (Options > Display) -->
+    <div id="tv-overlay" aria-hidden="true">
+      <div class="tv-vignette"></div>
+      <div class="tv-scanlines"></div>
     </div>
 
     <!-- Crossfade between the orbit view and the island -->

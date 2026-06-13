@@ -208,9 +208,67 @@ body.title-up #island-pin { display: none !important; }
 }
 #ts-volume-pct { min-width: 44px; text-align: right; }
 
+/* Story intro — the narrator beats after START GAME. The planet carries the
+   scene: the heavy menu vignette lifts to a soft bottom shade behind the box. */
+#title-screen.is-story {
+  background: linear-gradient(180deg, rgba(2, 4, 10, 0.12) 55%, rgba(2, 4, 10, 0.72));
+  cursor: pointer;
+}
+#title-screen.is-story .ts-logo,
+#title-screen.is-story .ts-tag { display: none; }
+
+#ts-story {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 20px 88px;
+}
+#ts-story.hidden { display: none; }
+
+.ts-story-box {
+  width: min(620px, 100%);
+  padding: 18px 22px 13px;
+  background: rgba(8, 14, 26, 0.88);
+  border: 1px solid rgba(111, 227, 255, 0.32);
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(2, 4, 10, 0.6), 0 0 30px rgba(111, 227, 255, 0.1);
+  backdrop-filter: blur(6px);
+}
+
+#ts-story-text {
+  min-height: 3.4em;
+  font-size: 14.5px;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  opacity: 0.92;
+}
+#ts-story-text.beat-in { animation: ts-beat-in 0.45s ease both; }
+@keyframes ts-beat-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 0.92; transform: translateY(0); }
+}
+
+.ts-story-cue {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  animation: ts-cue-blink 1.4s ease-in-out infinite;
+}
+@keyframes ts-cue-blink { 50% { opacity: 0.45; } }
+
 @media (max-width: 680px) {
   .ts-menu { margin-top: 38px; }
   .ts-panel { max-height: 54vh; padding: 16px 18px 12px; }
+  #ts-story { padding-bottom: 64px; }
+  #ts-story-text { font-size: 13px; }
 }
 
 /* Background music controls */
@@ -1236,6 +1294,33 @@ body.title-up #island-pin { display: none !important; }
   90% { transform: translate(calc(-50% - 2px), -100%) skewX(6deg); }
   94% { transform: translate(calc(-50% + 2px), -100%) skewX(-5deg); }
   97%, 100% { transform: translate(-50%, -100%); }
+}
+
+/* ---------- the TV look: scanlines + vignette ---------- */
+
+/* Full-bleed glass over the whole game — on by default, toggled in
+   Options > Display. Pointer-events stay off; the game plays identically. */
+#tv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  pointer-events: none;
+  display: none;
+}
+body.tv-on #tv-overlay { display: block; }
+#tv-overlay > div { position: absolute; inset: 0; }
+
+/* Curved-glass shading: darkened edges, soft center */
+.tv-vignette {
+  background: radial-gradient(ellipse at 50% 50%,
+    transparent 56%, rgba(2, 4, 10, 0.34) 86%, rgba(2, 4, 10, 0.6));
+}
+
+/* Horizontal scanlines */
+.tv-scanlines {
+  background: repeating-linear-gradient(0deg,
+    rgba(4, 8, 14, 0.26) 0px, rgba(4, 8, 14, 0.26) 1px,
+    transparent 1px, transparent 3px);
 }
 
 /* Crossfade overlay between views */
