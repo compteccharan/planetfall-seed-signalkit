@@ -494,32 +494,47 @@ a clean boot — `?view=` / `?level=` dev shortcuts skip it. While it's up, a
 panel, pin). A nice side effect: the first menu interaction is the user
 gesture that unblocks music autoplay — the "press start" beat is real.
 
-### Story intro (added 2026-06-11, story agreed with Rizel the same day)
-START GAME plays 5 narrator beats in a Bug Bash-style box over the planet
-(Space/Enter/click advance, Esc skips, last beat cues "BEGIN"), then drops
-into orbit. The story (`STORY_BEATS` in titleScreen.js): the old world saved
-every line of code but was made for humans only — no space for everyone now
-that humans and AI agents build together — so you left for a new world in
-your own spaceship with your five subagent friends; the ship broke down and
-crashed, and the pieces that keep it running scattered across an island;
-bring the pieces back, wake your friends, fix the ship, fly again.
+### Story intro (reworked 2026-06-14)
+The original storybook-narrator intro was rejected as not game-like — it
+*described the world* but never talked to the player or gave a mission. START
+GAME now plays a **6-beat radio transmission from the rebellion**, addressed
+to the downed pilot (the player), in the full-width story bar (Space/Enter/
+click advance, Esc skips, last beat cues "to begin"), then drops into orbit.
+It hands the player a mission and ends promoting "Pilot" → "rebel". The
+transmission ("if you can read this") *is* the NPC — gives "someone needs you"
+without a character to build. Beats (`STORY_BEATS` in titleScreen.js): ship
+survived but needs repairs → you left home to join the rebellion (a place
+where humans and agents work together) → the ship runs on **mission records**
+(flight paths, system checks, repair logs, pilot commands) → the crash
+scattered them across the planet → without them the ship can't run → fix the
+ship to join us, *see you soon, rebel*. Tagline: **THE REBELLION IS WAITING**.
 
-Story rules agreed with Rizel (keep these):
-- **Unnamed storybook narrator** (the Bug Bash voice) — nobody in-fiction
-  narrates. NO "ship's AI" as a character; the L3 questioner is just the
-  launch computer doing what launch computers do.
-- **The player's memory is fine.** "You weren't there — your checkpoints
-  were" requires it; amnesia would weaken the pitch. The crash scattered the
-  ship's parts (L1 reveals they're its memory) — nothing was "wiped".
-- **The old world is outgrown, never bad** — a size problem ("not enough
-  space for everyone"), not a feature gap. Never name any real-world tool.
+Story rules (updated):
+- **The speaker is the rebellion**, by radio, addressing the player — a
+  deliberate change from the old "nobody narrates / unnamed storybook
+  narrator" rule. Still NOT a ship's-AI character; the L3 questioner is just
+  the launch computer doing what launch computers do.
+- **The intro names no subagents and no gameplay** on purpose, so the levels
+  can change underneath it without breaking the opening.
+- **"Mission records" = the ship's session history**, defined concretely by
+  listing what's in it — the most faithful-to-Entire piece in the game (real
+  Entire captures agent sessions as "a searchable record of how code was
+  written"). Lead word for the recoverable thing is now *record*.
+- **"Rebellion" is a cause you go _toward_** (build free, humans + agents
+  together), never a war against anyone — no enemy words (war/enemy/them/take
+  back), to avoid an us-vs-them read. The old world is "home you left," never
+  bad. Never name any real-world tool.
+- **The player's memory is fine.** "You weren't there — your record was"
+  requires it; amnesia would weaken the pitch. Nothing was "wiped" — the crash
+  scattered the records.
 - **Plain language for non-native speakers**: short sentences, common words,
-  no idioms or sci-fi jargon ("the jump went wrong" was rejected). Pending:
-  the same pass over the level briefings; "bank" is load-bearing teaching
-  vocabulary — keep it but introduce it gently.
-- The player is a fan of agent-human collaboration; the L2 drones are "your
-  five subagent friends" who crashed with you (briefing copy not yet
-  re-tinted — pending).
+  no idioms or sci-fi jargon. (All-short-sentence drafts read "staccato" — the
+  fix was varied sentence length + the occasional one-line punch.)
+
+Pending story work: standardize the **vocabulary fork** (intro says "records",
+tagline/L1 still say "memory"); re-tint the level briefings and the L3 liftoff
+win screen, which are still on the old memory/fragments framing (add a "rebel"
+sign-off at liftoff to bookend the intro).
 
 ### The TV look (decided 2026-06-12)
 Scanlines + vignette over the whole screen, **on by default**, toggled at
