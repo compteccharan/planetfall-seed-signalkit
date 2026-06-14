@@ -2,15 +2,18 @@
 // load. START GAME dismisses it; OPTIONS holds CONTROLS and SOUND. Sound
 // drives the existing #audio-panel controls (the canonical music state) so
 // this menu and the in-game panel can never disagree.
-// The opening story — an unnamed storybook narrator (the Bug Bash register):
-// third person about the world, then the last beat turns to the player with
-// the goal. Plain words on purpose; no idioms, no jargon.
+// The opening story — a transmission from the rebellion, addressed to the
+// downed pilot (the player). It hands the player a mission without naming any
+// gameplay so the levels can change underneath it. "Mission records" defines
+// the ship's session history in plain, concrete terms (flight paths, repair
+// logs, pilot commands). Ends by promoting "Pilot" to "rebel".
 const STORY_BEATS = [
-  "The old world was built for people who write code. It saved every line, forever.",
-  "Then the way we build changed. Now humans and AI agents build together. You love working this way.",
-  "But the old world was made for humans only. There was not enough space for everyone. So you left for a new world — in your own spaceship, with your five subagent friends.",
-  "On the way, the ship broke down and crashed on a strange planet. The pieces that keep it running fell out, scattered across an island.",
-  "Bring the pieces back. Wake your friends. Fix the ship — and fly again.",
+  "Pilot, if you can read this, the ship survived, but it needs repairs.",
+  "You left your home planet to join the rebellion. We are building a place where humans and agents work together.",
+  "Your ship runs on mission records: flight paths, system checks, repair logs, and pilot commands.",
+  "When the ship went down, those records broke apart and scattered across this planet.",
+  "Without them, your ship cannot run.",
+  "Your mission: fix your ship, so you can join us. See you soon, rebel.",
 ];
 
 export function createTitleScreen({ onStart } = {}) {

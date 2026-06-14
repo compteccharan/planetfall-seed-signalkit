@@ -21,7 +21,7 @@ import { makeBeamTexture, makeIceBlock, makeIdSprite, genCheckpointId } from "./
 // offer Entire makes after a commit) is what restores it to the ship's memory.
 
 const INTERACT_DIST = 8;    // how close (XZ) to open a memory's terminal
-const TOTAL_TIME = 45;      // seconds to recover & bank EVERY memory (tunable — scary-tight)
+const TOTAL_TIME = 60;      // seconds to recover & bank EVERY memory (tunable — scary-tight)
 const MELT_DUR = 1.8;       // seconds the lost memories take to melt away
 const LOW_TIME = 22;        // clock turns urgent (red, pulsing) under this many seconds
 const CRIT_TIME = 8;        // clock goes CRITICAL (fast pulse) under this many seconds
