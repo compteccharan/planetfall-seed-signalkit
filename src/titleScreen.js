@@ -9,14 +9,15 @@
 // logs, pilot commands). Ends by promoting "Pilot" to "rebel".
 const STORY_BEATS = [
   "Pilot, if you can read this, the ship survived, but it needs repairs.",
-  "You left your home planet to join the rebellion. We are building a place where humans and agents work together.",
+  "You left your home planet to join the rebellion. The rebellion is building a place where humans and agents work together.",
   "Your ship runs on mission records: flight paths, system checks, repair logs, and pilot commands.",
   "When the ship went down, those records broke apart and scattered across this planet.",
   "Without them, your ship cannot run.",
-  "Your mission: fix your ship, so you can join us. See you soon, rebel.",
+  "Your mission: recover the records, repair the ship, and join us.",
+  "Click the landing marker on the planet to begin. See you soon, rebel.",
 ];
 
-export function createTitleScreen({ onStart } = {}) {
+export function createTitleScreen({ onStoryStart, onStart } = {}) {
   const root = document.getElementById("title-screen");
   const screens = {
     main: document.getElementById("ts-main"),
@@ -125,6 +126,7 @@ export function createTitleScreen({ onStart } = {}) {
     root.classList.add("is-story");
     for (const el of Object.values(screens)) el.classList.add("hidden");
     story.classList.remove("hidden");
+    onStoryStart?.();
     nextBeat();
   }
 

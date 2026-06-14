@@ -130,6 +130,7 @@ export function createPlanetView(renderer, { onIslandClick } = {}) {
   let islandFaces = false; // island is on the near side, facing camera
   let pointerDownAt = null;
   let active = false;
+  let holdLandingMarker = false;
 
   // Is a screen point over the island region of the globe?
   function overIsland(event) {
@@ -162,7 +163,7 @@ export function createPlanetView(renderer, { onIslandClick } = {}) {
   }
 
   function update(dt, t) {
-    planet.rotation.y += dt * 0.02; // gentle drift
+    if (!holdLandingMarker) planet.rotation.y += dt * 0.02; // gentle drift
     clouds.rotation.y += dt * 0.03;
     controls.update();
 
@@ -199,9 +200,10 @@ export function createPlanetView(renderer, { onIslandClick } = {}) {
     scene.updateMatrixWorld(true);
     anchor.getWorldPosition(tmpWorld);
     const dir = tmpWorld.clone().normalize();
-    camera.position.copy(dir).multiplyScalar(6.4);
-    camera.position.y += 0.7; // tip the island slightly below centre
+    const targetPos = dir.multiplyScalar(6.4);
+    targetPos.y += 0.7; // tip the island slightly below centre
     controls.target.set(0, 0, 0);
+    camera.position.copy(targetPos);
     controls.update();
   }
 
@@ -233,7 +235,11 @@ export function createPlanetView(renderer, { onIslandClick } = {}) {
     camera.updateProjectionMatrix();
   }
 
-  return { scene, camera, update, enter, exit, resize, reframe };
+  function setLandingMarkerHold(hold) {
+    holdLandingMarker = hold;
+  }
+
+  return { scene, camera, update, enter, exit, resize, reframe, setLandingMarkerHold };
 }
 
 // ---- helpers ----

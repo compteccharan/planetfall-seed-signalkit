@@ -87,6 +87,9 @@ body.title-up #hud,
 body.title-up #hint,
 body.title-up #audio-panel,
 body.title-up #island-pin { display: none !important; }
+body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
+  display: block !important;
+}
 
 .ts-logo {
   font-size: clamp(40px, 7vw, 66px);

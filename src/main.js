@@ -138,9 +138,16 @@ current.enter();
 
 // Title screen on a clean boot only — the dev shortcuts skip straight in.
 // While it's up the orbit view runs behind it as the attract backdrop.
-// When the story ends, re-frame the island so it's facing you and clickable —
-// the planet has been drifting behind the title + story the whole time.
-const titleScreen = createTitleScreen({ onStart: () => planetView.reframe() });
+// When the story starts, bring the landing marker into the transmission shot
+// and hold it there. The final beat can then tell the player to click what is
+// already on screen.
+const titleScreen = createTitleScreen({
+  onStoryStart: () => {
+    planetView.reframe();
+    planetView.setLandingMarkerHold(true);
+  },
+  onStart: () => planetView.setLandingMarkerHold(false),
+});
 if (!requestedView && !params.get("level")) titleScreen.show();
 
 // ---------- fade transition ----------
