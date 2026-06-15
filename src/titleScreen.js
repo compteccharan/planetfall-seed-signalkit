@@ -17,6 +17,8 @@ const STORY_BEATS = [
   "Click the landing marker on the planet to begin. See you soon, rebel.",
 ];
 
+import { sfx } from "./sfx.js";
+
 export function createTitleScreen({ onStoryStart, onStart } = {}) {
   const root = document.getElementById("title-screen");
   const screens = {
@@ -43,11 +45,17 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
   const volume = document.getElementById("ts-volume");
   const volumePct = document.getElementById("ts-volume-pct");
   const tvState = document.getElementById("ts-tv-state");
+  const sfxState = document.getElementById("ts-sfx-state");
 
   // The TV effect (scanlines + vignette) is on by default; the choice is
   // remembered between visits.
   const TV_KEY = "pf-tv-effect";
   document.body.classList.toggle("tv-on", localStorage.getItem(TV_KEY) !== "off");
+
+  // Sound effects are on by default; the choice is remembered between visits.
+  const SFX_KEY = "pf-sfx";
+  let sfxOn = localStorage.getItem(SFX_KEY) !== "off";
+  sfx.setMuted(!sfxOn);
 
   function syncDisplay() {
     const on = document.body.classList.contains("tv-on");
@@ -60,6 +68,19 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
     document.body.classList.toggle("tv-on", on);
     localStorage.setItem(TV_KEY, on ? "on" : "off");
     syncDisplay();
+  }
+
+  function syncSfx() {
+    if (!sfxState) return;
+    sfxState.textContent = sfxOn ? "ON" : "OFF";
+    sfxState.classList.toggle("is-off", !sfxOn);
+  }
+
+  function toggleSfx() {
+    sfxOn = !sfxOn;
+    localStorage.setItem(SFX_KEY, sfxOn ? "on" : "off");
+    sfx.setMuted(!sfxOn);
+    syncSfx();
   }
 
   let active = false;
@@ -113,7 +134,7 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
     }
     items = [...screens[name].querySelectorAll(".ts-item")];
     setSel(0);
-    if (name === "sound") syncSound();
+    if (name === "sound") { syncSound(); syncSfx(); }
     if (name === "display") syncDisplay();
   }
 
@@ -162,6 +183,7 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
       case "display": setScreen("display"); break;
       case "sound": setScreen("sound"); break;
       case "music-toggle": toggleMusic(); break;
+      case "sfx-toggle": toggleSfx(); break;
       case "tv-toggle": toggleTv(); break;
       case "back": back(); break;
     }

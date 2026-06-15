@@ -3,6 +3,7 @@ import { createTerrain } from "./terrain.js";
 import { FRAGMENTS } from "./debris.js";
 import { genCheckpointId, makeIceBlock } from "./memoryProps.js";
 import { makeRecord, makeWreck } from "./fallingProps.js";
+import { sfx } from "./sfx.js";
 
 // LEVEL 1 — "First Memories", rebuilt as a falling-records shooter.
 //
@@ -462,6 +463,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
       hitPoint = aimPoint.clone();
     }
     spawnBolt(hitPoint);
+    sfx.shoot();
     if (!hitObj) return;
     const entry = falling.find((f) => f.group === hitObj);
     if (!entry) return;
@@ -475,6 +477,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
       // wrong target — costs time
       removeFalling(entry);
       spawnSpark(hitObj.position.clone(), 0xff5a3c);
+      sfx.wrong();
       if (timedRunStarted) {
         timeLeft = Math.max(0, timeLeft - WRECK_PENALTY);
         updateClock();
@@ -543,6 +546,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
     // you can't grab while your hands are on the keyboard slip past). It only
     // freezes into ice once you `git commit` it (see advanceBank).
     spawnSpark(recordGroup.position.clone(), 0xffd27a);
+    sfx.recover();
     if (!bankLessonComplete) pauseForBankLesson();
     else openTerminal();
   }

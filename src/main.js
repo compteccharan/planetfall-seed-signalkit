@@ -5,6 +5,7 @@ import { createDroneBayView } from "./droneBayView.js";
 import { createArchiveView } from "./archiveView.js";
 import { createLaunchView } from "./launchView.js";
 import { createTitleScreen } from "./titleScreen.js";
+import { sfx } from "./sfx.js";
 
 const canvas = document.getElementById("scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -43,6 +44,25 @@ if (bgm && audioPanel && audioToggle && audioMute && audioVolume) {
     if (userPausedMusic) return;
     bgm.play().then(updateAudioUi).catch(updateAudioUi);
   };
+
+  // Sidechain ducking: dip the music instantly on a hit, then ramp it back to
+  // the player's set volume so the SFX punch through a momentary hole.
+  let duckRAF = null;
+  const duckMusic = (depth = 0.5, ms = 350) => {
+    if (bgm.muted) return;
+    const base = Number(audioVolume.value);
+    const floor = Math.max(0, base * depth);
+    bgm.volume = floor;
+    const start = performance.now();
+    cancelAnimationFrame(duckRAF);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / ms);
+      bgm.volume = floor + (base - floor) * t;
+      if (t < 1) duckRAF = requestAnimationFrame(step);
+    };
+    duckRAF = requestAnimationFrame(step);
+  };
+  sfx.setDucker(duckMusic);
   const removeGestureMusicStart = () => {
     for (const eventName of ["pointerdown", "click", "keydown", "touchstart"]) {
       window.removeEventListener(eventName, startMusicOnGesture, true);
