@@ -1,63 +1,112 @@
 import * as THREE from "three";
 import { createTerrain } from "./terrain.js";
-import { createFirstPerson } from "./firstPerson.js";
-import { createOverhead } from "./overhead.js";
-import { FRAGMENTS, BUILDERS } from "./debris.js";
-import { makeBeamTexture, makeIceBlock, makeIdSprite, genCheckpointId } from "./memoryProps.js";
+import { FRAGMENTS } from "./debris.js";
+import { genCheckpointId, makeIceBlock } from "./memoryProps.js";
+import { makeRecord, makeWreck } from "./fallingProps.js";
 
-// The walkable island level — LEVEL 1 ("First Memories").
+// LEVEL 1 — "First Memories", rebuilt as a falling-records shooter.
 //
-// A Diner-Dash-style loop, one memory at a time, driven by the REAL workflow
-// typed into the ship's terminal:
-//   walk up → terminal opens → `git add` (stage) → `git commit` (freeze in ice)
-//   → Entire offers to link a checkpoint → press y → ship memory restores.
-// When every memory is linked → run `entire checkpoint list` to review them all.
+// The crash flung the ship's records skyward; they're raining back down over
+// the wreck, tangled up with dead wreckage. You stand at the crash site behind
+// a salvage cannon that tracks your cursor. Shoot a glowing gold RECORD to
+// recover it; skip the dark WRECKAGE (shooting it costs you time).
 //
-// PRESSURE: a single level countdown runs the whole time. Bank every memory
-// before it hits zero, or the un-banked memories melt away and the run fails
-// (press R to retry). One clock for the whole level — not per-memory.
+// Each record you recover opens the ship's terminal and you BANK it with the
+// real workflow:  `git add` (stage) → `git commit` (freeze) → press Y to link a
+// CHECKPOINT (what actually restores it to the ship's memory). Recover at least
+// four, then run `entire checkpoint list` to review them after the clock ends.
 //
-// Teaching: a commit just freezes the change; linking a CHECKPOINT (the y/n
-// offer Entire makes after a commit) is what restores it to the ship's memory.
+// Teaching: a commit just freezes the change; linking a checkpoint is what the
+// ship remembers by. One clock for the whole run.
 
-const INTERACT_DIST = 8;    // how close (XZ) to open a memory's terminal
-const TOTAL_TIME = 60;      // seconds to recover & bank EVERY memory (tunable — scary-tight)
-const MELT_DUR = 1.8;       // seconds the lost memories take to melt away
-const LOW_TIME = 22;        // clock turns urgent (red, pulsing) under this many seconds
-const CRIT_TIME = 8;        // clock goes CRITICAL (fast pulse) under this many seconds
-const PANIC_TIME = 22;      // the SKY starts shifting toward panic-red under this many seconds
-const MEMORY_COUNT = 3;     // calm tutorial: three memories
-const BEAM_COLOR = 0xffd27a;
+// Score-attack: recover as many records as you can before 0:00. Clear the
+// MINIMUM to power the ship; anything above is bonus. Hard but not impossible:
+// each record costs the full git add/commit/link loop, so it's a race against
+// your own typing as much as the clock.
+const TOTAL_TIME = 40;       // seconds in the run
+const MIN_TO_PASS = 4;       // recover at least this many or the run fails
+const WRECK_PENALTY = 4;     // seconds lost for shooting wreckage
+const LOW_TIME = 15;         // clock turns urgent (red, pulsing) under this
+const CRIT_TIME = 6;         // clock goes CRITICAL (fast pulse) under this
+const PANIC_TIME = 15;       // the SKY starts shifting toward panic-red under this
+
+// Falling field — a vertical plane in front of the cannon.
+const PLANE_Z = 0;
+const SPAWN_Y = 56;
+const DESPAWN_Y = 1.0;
+const SPAWN_X = 32;          // half-width records can fall within
+const RECORD_SCALE = 3.0;
+const WRECK_SCALE = 2.6;
+const MAX_FALLING = 8;
+
+// Escalation — the run gets harder as the clock drains (0 at start, 1 at 0:00):
+// drops come faster, records get scarcer, everything falls quicker.
+const SPAWN_MAX = 0.85;      // seconds between drops, early
+const SPAWN_MIN = 0.42;      // seconds between drops, late
+const RECORD_CHANCE_START = 0.55;
+const RECORD_CHANCE_END = 0.34;
+const FALL_BASE = 8;
+const FALL_VAR = 4;
+const FALL_RAMP = 1.4;       // top speed = base * (1 + FALL_RAMP) near the end
+function lerp(a, b, t) { return a + (b - a) * t; }
 
 // Sky panic palette — the whole world reddens as the clock runs out.
-const SKY_CALM  = new THREE.Color(0x2a2350);  // lavender dusk (the resting sky/fog)
-const SKY_PANIC = new THREE.Color(0x6e0f16);  // angry crimson
-const FOG_PANIC = new THREE.Color(0x4a0a0e);  // deep blood fog closing in
+const SKY_CALM  = new THREE.Color(0x2a2350);
+const SKY_PANIC = new THREE.Color(0x6e0f16);
+const FOG_PANIC = new THREE.Color(0x4a0a0e);
 const DOME_CALM = new THREE.Color(0x3a3168);
 const DOME_PANIC = new THREE.Color(0x7a141c);
-const SUN_CALM  = new THREE.Color(0xfff1dc);  // warm sun
-const SUN_PANIC = new THREE.Color(0xff5a3c);  // hot red alarm light
+const SUN_CALM  = new THREE.Color(0xfff1dc);
+const SUN_PANIC = new THREE.Color(0xff5a3c);
 
-// Where each memory surfaces on the island (world XZ).
-const PLACEMENTS = [
-  { x: -34, z: -28 },
-  { x: 40, z: -18 },
-  { x: 28, z: 38 },
-  { x: -30, z: 36 },
+const BRIEFING_BEATS = [
+  "Pilot, records are falling through the sky.",
+  "Shoot the real records before they hit the ground.",
+  "Leave the wreckage alone. Bad hits cost you time.",
+  "Recover at least 4 before the clock runs out.",
 ];
-const DEV_LEVEL2_CHECKPOINTS = ["31f0cafe4d12", "7e11a2b09c44", "b0a7ded51a6e"];
 
-// What the terminal asks for at each stage of a memory's recovery.
-const STEPS = {
-  dormant:   { type: "command", cmd: "git add",    accept: ["git add"],    hint: "Stage the recovered memory" },
-  recovered: { type: "command", cmd: "git commit", accept: ["git commit"], hint: "Commit it before the clock runs out" },
-  frozen:    { type: "confirm", question: "Link this commit to a checkpoint?",
-               hint: "Entire offers to capture the session behind this commit" },
+const MODE_PROMPTS = {
+  tutorial: {
+    action: "START TUTORIAL",
+    note: "First record is practice. The clock stays off.",
+  },
+  level: {
+    action: "PLAY LEVEL 1",
+    note: "Clock starts now. Recover at least 4 records.",
+  },
 };
-// After every memory is linked, the player reviews them with this command.
+
+const BANK_LESSONS = {
+  dormant: {
+    kicker: "STAGE IT",
+    title: "git add",
+    text: "Pull the record out of the wreckage and set it on the recovery clamp.",
+    cue: "press Space to stage",
+  },
+  recovered: {
+    kicker: "FREEZE IT",
+    title: "git commit",
+    text: "Lock it in. Now it cannot be lost.",
+    cue: "press Space to freeze",
+  },
+  frozen: {
+    kicker: "REMEMBER IT",
+    title: "press y",
+    text: "File it into the ship's memory as a checkpoint. That makes it recoverable later.",
+    cue: "press Space to link",
+  },
+};
+
+// What the terminal asks for at each stage of banking a record.
+const STEPS = {
+  dormant:   { type: "command", cmd: "git add",    accept: ["git add"],    hint: "ADD" },
+  recovered: { type: "command", cmd: "git commit", accept: ["git commit"], hint: "COMMIT" },
+  frozen:    { type: "confirm", question: "Link this record to a checkpoint?", hint: "LINK CHECKPOINT" },
+};
 const REVIEW_STEP = {
   type: "command", cmd: "entire checkpoint list", accept: ["entire checkpoint list"],
-  hint: "All memories recovered — review what you've banked",
+  hint: "Review recovered records",
 };
 
 function normalizeCmd(s) {
@@ -68,112 +117,70 @@ function cmdMatches(input, accepts) {
   return accepts.some((a) => n === a || n.startsWith(a + " "));
 }
 
-export function createIslandView(renderer, { onExit, onComplete, onNext, devStartLevel = 1 } = {}) {
+export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) {
   const canvas = renderer.domElement;
-  const devLevel2 = devStartLevel === 2;
 
   // ---------- scene & sky ----------
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2a2350); // lavender dusk sky
-  scene.fog = new THREE.Fog(0x2a2350, 90, 320);
+  scene.background = SKY_CALM.clone();
+  scene.fog = new THREE.Fog(SKY_CALM.clone(), 90, 380);
 
   const camera = new THREE.PerspectiveCamera(
-    62, window.innerWidth / window.innerHeight, 0.1, 2000
+    55, window.innerWidth / window.innerHeight, 0.1, 2000
   );
+  camera.position.set(0, 24, 50);
+  camera.lookAt(0, 22, 0);
 
-  // ---------- lighting (soft, warm sun in a lavender sky) ----------
+  // ---------- lighting ----------
   scene.add(new THREE.HemisphereLight(0xcdbcff, 0x3a2f5e, 0.7));
-  const sun = new THREE.DirectionalLight(0xfff1dc, 1.5);
-  sun.position.set(60, 90, 40);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
+  sun.position.set(40, 70, 60);
   scene.add(sun);
-  scene.add(new THREE.AmbientLight(0x6a5a92, 0.3));
+  scene.add(new THREE.AmbientLight(0x6a5a92, 0.35));
+  const fill = new THREE.DirectionalLight(0x88c0ff, 0.5);
+  fill.position.set(-30, 20, 40);
+  scene.add(fill);
 
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(900, 32, 16),
-    new THREE.MeshBasicMaterial({ color: 0x3a3168, side: THREE.BackSide, fog: false })
+    new THREE.MeshBasicMaterial({ color: DOME_CALM.clone(), side: THREE.BackSide, fog: false })
   );
   scene.add(dome);
 
-  // ---------- terrain ----------
-  const terrain = createTerrain({ size: 200, segments: 220, maxHeight: 26, seed: 1337 });
+  // ---------- terrain (backdrop only) ----------
+  const terrain = createTerrain({ size: 200, segments: 220, maxHeight: 22, seed: 1337 });
   scene.add(terrain.mesh, terrain.water);
 
-  // ---------- memories ----------
-  const beamTex = makeBeamTexture();
-  const artifacts = [];
-  FRAGMENTS.slice(0, MEMORY_COUNT).forEach((frag, idx) => {
-    const place = PLACEMENTS[idx % PLACEMENTS.length];
-    const groundY = terrain.heightAt(place.x, place.z);
-    const anchor = new THREE.Group();
-    anchor.position.set(place.x, groundY, place.z);
+  // ---------- the salvage cannon ----------
+  // Mounted to the camera like a foreground weapon so it always reads at the
+  // bottom-centre of the screen; we pivot the whole rig to aim at the cursor.
+  scene.add(camera);                 // so the camera's children get rendered
+  const cannon = buildCannon();
+  cannon.position.set(0, -7, -16);
+  cannon.scale.setScalar(0.9);
+  camera.add(cannon);
+  const MUZZLE_LOCAL = new THREE.Vector3(0, 1.2, 5.1);
 
-    const model = BUILDERS[frag.kind]();
-    model.scale.setScalar(14);
-    model.position.y = 1.4;
-    anchor.add(model);
+  // ---------- falling field ----------
+  const fallGroup = new THREE.Group();
+  scene.add(fallGroup);
+  const falling = [];          // { group, kind, vy }
+  const effects = [];          // transient bolts / sparks
+  let spawnTimer = 0;
 
-    // A tall light beam so the memory is findable from across the island.
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.6, 0.6, 60, 12, 1, true),
-      new THREE.MeshBasicMaterial({
-        map: beamTex, color: BEAM_COLOR, transparent: true, opacity: 0.5,
-        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-        fog: false,
-      })
-    );
-    beam.position.y = 30;
-    anchor.add(beam);
-
-    const glow = new THREE.PointLight(BEAM_COLOR, 8, 40, 2);
-    glow.position.y = 3;
-    anchor.add(glow);
-
-    scene.add(anchor);
-    artifacts.push({
-      anchor, model, beam, glow, fragment: frag,
-      state: "dormant",   // dormant → recovered (staged) → frozen (committed) → checkpointed
-      ice: null, idSprite: null, core: null, id: null, iceY: 0,
-      melting: false, meltT: 0,   // melt-away animation when the level times out
-      bobOff: Math.random() * 10,
-    });
-  });
-
-  // ---------- first-person controller ----------
-  const fp = createFirstPerson(camera, canvas, {
-    heightAt: terrain.heightAt,
-    radius: terrain.radius * 0.96,
-    eyeHeight: 2.6,
-    speed: 24,
-  });
-  scene.add(fp.controls.object);
-
-  // Bird's-eye map (M) — spot the memory beams from above, keep walking.
-  const overhead = createOverhead(scene, terrain, camera);
-  function setMap(on) {
-    if (overhead.on === on) return;
-    overhead.set(on);
-    fp.setAlwaysMove(on);                       // arrows work without pointer lock
-    scene.fog.near = on ? 500 : 90;             // don't fog the map out
-    scene.fog.far = on ? 1400 : 320;
-    crosshair?.classList.toggle("hidden", on || !fp.isLocked);
-  }
+  const raycaster = new THREE.Raycaster();
+  const aimPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -PLANE_Z);
+  const aimPoint = new THREE.Vector3(0, 24, PLANE_Z);
+  const ndc = new THREE.Vector2(0, 0);
+  let mouseClient = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
   // ---------- HUD elements ----------
   const promptEl = document.getElementById("fp-prompt");
-  const controlsEl = document.getElementById("fp-controls");
   const crosshair = document.getElementById("crosshair");
+  const reticle = document.getElementById("shooter-reticle");
   const islandHud = document.getElementById("island-hud");
   const tutorialEl = document.getElementById("tutorial");
   const actionBar = document.getElementById("action-bar");
-  const actionBarFill = document.getElementById("action-bar-fill");
-  const shipMeter = document.getElementById("ship-meter");
-  const shipMeterFill = document.getElementById("ship-meter-fill");
-  const shipMeterPct = document.getElementById("ship-meter-pct");
-  const ckptCard = document.getElementById("ckpt-card");
-  const ccId = document.getElementById("cc-id");
-  const ccSummary = document.getElementById("cc-summary");
-  const ccAttrFill = document.getElementById("cc-attr-fill");
-  const ccAttrText = document.getElementById("cc-attr-text");
   const termEl = document.getElementById("terminal");
   const termHint = document.getElementById("term-hint");
   const termInput = document.getElementById("term-input");
@@ -182,49 +189,191 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
   const termCta = document.getElementById("term-cta");
   const countdownEl = document.getElementById("countdown");
   const countdownTime = document.getElementById("countdown-time");
+  const tallyEl = document.getElementById("shooter-tally");
+  const stCount = document.getElementById("st-count");
+  const stMin = document.getElementById("st-min");
+  const stFill = document.getElementById("st-fill");
   const levelFail = document.getElementById("level-fail");
+  const lfTitle = document.getElementById("lf-title");
+  const lfSub = document.getElementById("lf-sub");
   const briefingEl = document.getElementById("briefing");
-  const briefingStartBtn = document.getElementById("briefing-start");
-  const devLevelBadge = document.getElementById("dev-level-badge");
+  const briefingText = document.getElementById("briefing-text");
+  const briefingNext = document.getElementById("briefing-next");
+  const modePrompt = document.getElementById("level-mode-prompt");
+  const modeAction = document.getElementById("level-mode-action");
+  const modeNote = document.getElementById("level-mode-note");
+  const missionLesson = document.getElementById("mission-lesson");
+  const missionLessonKicker = document.getElementById("mission-lesson-kicker");
+  const missionLessonTitle = document.getElementById("mission-lesson-title");
+  const missionLessonText = document.getElementById("mission-lesson-text");
+  const missionLessonCue = document.getElementById("mission-lesson-cue");
   const fpShared = document.getElementById("fp-shared");
 
-  let target = null;            // nearest memory in range
-  let active = false;           // is this view being shown?
-  let promptText = null;
-  let controlsLocked = null;
-  const taught = new Set();
-  let tutorialTimer = null;
-  let cardTimer = null;
-  let msgTimer = null;
+  let active = false;
+  let tutorialTimer = null, msgTimer = null, shakeT = 0;
 
-  // Terminal state
+  // Banking state — the terminal flow after recovering a record.
   let terminalOpen = false;
-  let termTarget = null;        // the memory whose terminal is open
-  let buffer = "";              // what the player has typed
-  let dismissedMemory = null;   // memory the player Esc'd out of (until they leave)
-  let reviewMode = false;       // all linked → review with `entire checkpoint list`
-  let listShown = false;        // the list has been printed
+  let banking = false;          // a record is captured and ready to bank
+  let bankTarget = null;        // the record mesh being banked
+  let bankIce = null;           // the ice block freezing it while you bank
+  let bankState = "dormant";    // dormant → recovered → frozen → done
+  let bankLessonComplete = false;
+  let lessonPaused = false;
+  let lessonNarrating = false;
+  let buffer = "";
+  let reviewMode = false;       // all linked → type `entire checkpoint list`
+  let listShown = false;
+  let banked = 0;
+  const bankedRecords = [];
 
-  // Level countdown — the single source of pressure for the whole run.
+  // Level countdown — the single source of pressure.
   let timeLeft = TOTAL_TIME;
   let timerRunning = false;
+  let timedRunStarted = false;
   let failed = false;
-  let started = false;          // briefing dismissed → movement + clock go live
-
-  const checkpointedCount = () =>
-    artifacts.filter((a) => a.state === "checkpointed").length;
-  const allLinked = () => checkpointedCount() >= artifacts.length;
+  let started = false;
+  let briefingIndex = 0;
+  let modePromptState = null;
 
   // ---------- HUD helpers ----------
   function setPrompt(text) {
-    if (!promptEl || text === promptText) return;
-    promptText = text;
+    if (!promptEl) return;
     if (text) { promptEl.textContent = text; promptEl.classList.remove("hidden"); }
     else promptEl.classList.add("hidden");
   }
-  function hideActionBar() { actionBar.classList.add("hidden"); }
+  function showTutorial(text, ms = 5500) {
+    if (!tutorialEl) return;
+    clearTimeout(tutorialTimer);
+    tutorialEl.textContent = text;
+    tutorialEl.classList.remove("hidden");
+    if (ms > 0) tutorialTimer = setTimeout(() => tutorialEl.classList.add("hidden"), ms);
+  }
+  // Score readout: recovered / minimum (e.g. 0/5 → 5/5 → 7/5). Goes green +
+  // "overcharged" once you're past the minimum.
+  function updateTally() {
+    if (stCount) stCount.textContent = String(banked);
+    if (stMin) stMin.textContent = String(MIN_TO_PASS);
+    if (stFill) stFill.style.width = Math.min(100, (banked / MIN_TO_PASS) * 100) + "%";
+    tallyEl?.classList.toggle("is-met", banked >= MIN_TO_PASS);
+    tallyEl?.classList.toggle("is-over", banked > MIN_TO_PASS);
+  }
+  function restartTextAnimation(el) {
+    if (!el) return;
+    el.classList.remove("beat-in");
+    void el.offsetWidth;
+    el.classList.add("beat-in");
+  }
+  function renderBriefingBeat() {
+    if (!briefingText) return;
+    briefingText.textContent = BRIEFING_BEATS[briefingIndex] || "";
+    restartTextAnimation(briefingText);
+    if (briefingNext) briefingNext.textContent = "to continue";
+  }
+  function advanceBriefing() {
+    if (started) return;
+    if (briefingIndex < BRIEFING_BEATS.length - 1) {
+      briefingIndex += 1;
+      renderBriefingBeat();
+      return;
+    }
+    showModePrompt("tutorial");
+  }
+  function showModePrompt(kind) {
+    const prompt = MODE_PROMPTS[kind];
+    if (!prompt || !modePrompt) return;
+    modePromptState = kind;
+    timerRunning = false;
+    tutorialEl?.classList.add("hidden");
+    hideBankLesson();
+    closeTerminal();
+    briefingEl?.classList.add("hidden");
+    if (modeAction) modeAction.textContent = prompt.action;
+    if (modeNote) modeNote.textContent = prompt.note;
+    modePrompt.dataset.mode = kind;
+    modePrompt.classList.remove("hidden");
+  }
+  function visibleModePromptKind() {
+    if (!modePrompt || modePrompt.classList.contains("hidden")) return null;
+    if (modePrompt.dataset.mode) return modePrompt.dataset.mode;
+    const action = modeAction?.textContent?.trim();
+    if (action === MODE_PROMPTS.level.action) return "level";
+    if (action === MODE_PROMPTS.tutorial.action) return "tutorial";
+    return null;
+  }
+  function hideModePrompt() {
+    if (modePrompt) {
+      modePrompt.classList.add("hidden");
+      delete modePrompt.dataset.mode;
+    }
+    modePromptState = null;
+    modeAction?.blur();
+  }
+  function acceptModePrompt() {
+    const acceptedMode = visibleModePromptKind() || modePromptState;
+    if (!acceptedMode) return;
+    hideModePrompt();
+    if (acceptedMode === "tutorial") {
+      startLevel();
+    } else if (acceptedMode === "level") {
+      startTimedRun();
+    }
+  }
+  function renderBankLesson() {
+    const lesson = BANK_LESSONS[bankState];
+    if (!lesson || !missionLesson) return;
+    if (missionLessonKicker) missionLessonKicker.textContent = lesson.kicker;
+    if (missionLessonTitle) missionLessonTitle.textContent = lesson.title;
+    if (missionLessonText) {
+      missionLessonText.textContent = lesson.text;
+      restartTextAnimation(missionLessonText);
+    }
+    if (missionLessonCue) missionLessonCue.textContent = lesson.cue;
+    missionLesson.classList.remove("hidden");
+  }
+  function hideBankLesson() {
+    missionLesson?.classList.add("hidden");
+  }
+  function pauseForBankLesson() {
+    lessonPaused = true;
+    lessonNarrating = true;
+    timerRunning = false;
+    tutorialEl?.classList.add("hidden");
+    closeTerminal();
+    renderBankLesson();
+  }
+  function openBankLessonTerminal() {
+    if (!lessonPaused || !lessonNarrating) return;
+    lessonNarrating = false;
+    hideBankLesson();
+    buffer = "";
+    openTerminal();
+  }
+  function finishBankLesson() {
+    if (!lessonPaused) return;
+    lessonPaused = false;
+    lessonNarrating = false;
+    bankLessonComplete = true;
+    hideBankLesson();
+  }
+  function startTimedRun() {
+    if (failed || reviewMode || listShown) return;
+    if (modePrompt) {
+      modePrompt.classList.add("hidden");
+      delete modePrompt.dataset.mode;
+    }
+    modePromptState = null;
+    modeAction?.blur();
+    lessonPaused = false;
+    lessonNarrating = false;
+    closeTerminal();
+    timedRunStarted = true;
+    timerRunning = true;
+    updateClock();
+    refreshHud();
+  }
 
-  // ---------- level countdown ----------
+  // ---------- level countdown / panic sky ----------
   function fmtTime(s) {
     s = Math.max(0, Math.ceil(s));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -234,14 +383,12 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
     countdownEl?.classList.toggle("is-low", timerRunning && timeLeft <= LOW_TIME);
     countdownEl?.classList.toggle("is-critical", timerRunning && timeLeft <= CRIT_TIME);
   }
-
-  // How hard the sky is panicking right now: 0 = calm lavender, 1 = full crimson throb.
   function panicFactor() {
-    if (failed) return 1;                         // hold the dread behind the fail screen
+    if (failed) return 1;
     if (!timerRunning || timeLeft > PANIC_TIME) return 0;
-    let p = (PANIC_TIME - timeLeft) / PANIC_TIME; // 0 at PANIC_TIME → 1 at 0:00
-    p *= p;                                        // eased: barely there early, harsh late
-    if (timeLeft <= CRIT_TIME) {                   // throb once it's critical
+    let p = (PANIC_TIME - timeLeft) / PANIC_TIME;
+    p *= p;
+    if (timeLeft <= CRIT_TIME) {
       const throb = 0.5 + 0.5 * Math.sin(performance.now() / 85);
       p += 0.14 * throb;
     }
@@ -254,211 +401,165 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
     dome.material.color.copy(DOME_CALM).lerp(DOME_PANIC, p);
     sun.color.copy(SUN_CALM).lerp(SUN_PANIC, p * 0.85);
   }
-  function failLevel() {
-    if (failed) return;
-    failed = true;
-    timerRunning = false;
-    setMap(false);
-    closeTerminal(false);
-    fp.detach();                  // freeze the player behind the fail screen
-    // Un-banked memories always melt; if they ran out the clock on the final
-    // `entire checkpoint list` (all banked, not yet reviewed), the whole run melts.
-    for (const a of artifacts) {
-      if (reviewMode || a.state !== "checkpointed") { a.melting = true; a.meltT = MELT_DUR; }
-    }
-    countdownEl?.classList.remove("is-low", "is-critical");
-    tutorialEl?.classList.add("hidden");
-    levelFail?.classList.remove("hidden");
+
+  // ---------- spawning / falling ----------
+  function clearFalling() {
+    for (const f of falling) fallGroup.remove(f.group);
+    falling.length = 0;
   }
-  function resetLevel() {
-    failed = false;
-    levelFail?.classList.add("hidden");
-    if (active) fp.attach();      // movement resumes for the new run
-    for (const a of artifacts) {
-      if (a.ice) { a.anchor.remove(a.ice); a.ice = null; }
-      if (a.idSprite) { a.anchor.remove(a.idSprite); a.idSprite = null; }
-      if (a.core) { a.anchor.remove(a.core); a.core = null; }
-      a.state = "dormant";
-      a.id = null;
-      a.melting = false; a.meltT = 0;
-      a.model.position.y = 1.4;
-      setModelOpacity(a.model, 1);
-    }
-    reviewMode = false;
-    listShown = false;
-    dismissedMemory = null;
-    shipMeter?.classList.remove("is-full");
-    setPower();
-    timeLeft = TOTAL_TIME;
-    timerRunning = true;
-    updateClock();
-    showTutorial("New attempt — bank all three memories before the clock hits zero.", 4500);
+  // How far into the run we are: 0 at the start, 1 at 0:00.
+  function difficulty() {
+    return Math.min(1, Math.max(0, 1 - timeLeft / TOTAL_TIME));
+  }
+  function spawnDrop() {
+    if (falling.length >= MAX_FALLING) return;
+    const d = difficulty();
+    const isRecord = Math.random() < lerp(RECORD_CHANCE_START, RECORD_CHANCE_END, d);
+    const group = isRecord ? makeRecord() : makeWreck();
+    group.scale.setScalar(isRecord ? RECORD_SCALE : WRECK_SCALE);
+    group.position.set(
+      (Math.random() * 2 - 1) * SPAWN_X,
+      SPAWN_Y + Math.random() * 10,
+      PLANE_Z + (Math.random() - 0.5) * 1.5
+    );
+    group.userData.kind = isRecord ? "record" : "wreck";
+    fallGroup.add(group);
+    const vy = (FALL_BASE + Math.random() * FALL_VAR) * (1 + FALL_RAMP * d);
+    falling.push({ group, kind: isRecord ? "record" : "wreck", vy });
   }
 
-  // Dev-only Level 2 entry point: pretend Level 1 has already been completed so
-  // the next level can be built/tested without replaying the timed tutorial.
-  function seedLevel2DevState() {
-    started = true;
-    failed = false;
-    timerRunning = false;
-    reviewMode = false;
-    listShown = true;
-    dismissedMemory = null;
-    levelFail?.classList.add("hidden");
-    briefingEl?.classList.add("hidden");
-    termEl?.classList.add("hidden");
-
-    artifacts.forEach((a, idx) => {
-      a.state = "checkpointed";
-      a.id = DEV_LEVEL2_CHECKPOINTS[idx % DEV_LEVEL2_CHECKPOINTS.length];
-      a.melting = false;
-      a.meltT = 0;
-      a.model.position.y = 1.4;
-      setModelOpacity(a.model, 1);
-
-      if (!a.ice) {
-        const ice = makeIceBlock();
-        ice.position.y = a.model.position.y + 0.6;
-        a.iceY = ice.position.y;
-        a.anchor.add(ice);
-        a.ice = ice;
+  // ---------- shooting ----------
+  function fire() {
+    if (!started || failed || banking || reviewMode || listShown || visibleModePromptKind()) return;
+    // Aim ray from the camera through the cursor.
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(fallGroup.children, true);
+    let hitObj = null, hitPoint = null;
+    if (hits.length) {
+      hitPoint = hits[0].point.clone();
+      let o = hits[0].object;
+      while (o.parent && o.parent !== fallGroup) o = o.parent;
+      hitObj = o;
+    } else {
+      hitPoint = aimPoint.clone();
+    }
+    spawnBolt(hitPoint);
+    if (!hitObj) return;
+    const entry = falling.find((f) => f.group === hitObj);
+    if (!entry) return;
+    if (entry.kind === "record") {
+      // Pull it out of the falling list but keep it in the scene — it becomes
+      // the captured record we bank, hovering in view until it's checkpointed.
+      const i = falling.indexOf(entry);
+      if (i >= 0) falling.splice(i, 1);
+      startBank(entry.group);
+    } else {
+      // wrong target — costs time
+      removeFalling(entry);
+      spawnSpark(hitObj.position.clone(), 0xff5a3c);
+      if (timedRunStarted) {
+        timeLeft = Math.max(0, timeLeft - WRECK_PENALTY);
+        updateClock();
       }
-      a.ice.material.opacity = 0.62;
-      a.ice.material.emissive.setHex(0x2a6c8a);
-      a.ice.material.emissiveIntensity = 1.1;
+      flashScreen();
+      shakeT = 0.25;
+    }
+  }
+  function removeFalling(entry) {
+    fallGroup.remove(entry.group);
+    const i = falling.indexOf(entry);
+    if (i >= 0) falling.splice(i, 1);
+  }
 
-      if (!a.core) {
-        const core = new THREE.PointLight(0x8fe3ff, 6, 26, 2);
-        core.position.copy(a.ice.position);
-        a.anchor.add(core);
-        a.core = core;
-      }
-      if (!a.idSprite) {
-        const spr = makeIdSprite(a.id);
-        spr.position.y = a.iceY + 5;
-        a.anchor.add(spr);
-        a.idSprite = spr;
-      }
-
-      a.beam.visible = false;
-      a.glow.visible = false;
+  function spawnBolt(target) {
+    const muzzle = cannon.localToWorld(MUZZLE_LOCAL.clone());
+    const dir = target.clone().sub(muzzle);
+    const len = dir.length();
+    const geo = new THREE.CylinderGeometry(0.18, 0.18, len, 8);
+    geo.translate(0, len / 2, 0);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x9bf0ff, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     });
-
-    shipMeter?.classList.add("is-full");
-    setPower();
-    updateClock();
-    applyPanicSky();
+    const bolt = new THREE.Mesh(geo, mat);
+    bolt.position.copy(muzzle);
+    bolt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    scene.add(bolt);
+    effects.push({ obj: bolt, life: 0.14, max: 0.14, kind: "bolt" });
   }
-
-  // Landing briefing — the level is frozen (no clock, no movement) until START.
-  function showBriefing() {
-    timerRunning = false;
-    fp.detach();
-    tutorialEl?.classList.add("hidden");
-    briefingEl?.classList.remove("hidden");
+  function spawnSpark(pos, color) {
+    const s = new THREE.Mesh(
+      new THREE.SphereGeometry(1.4, 12, 12),
+      new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      })
+    );
+    s.position.copy(pos);
+    scene.add(s);
+    effects.push({ obj: s, life: 0.3, max: 0.3, kind: "spark" });
   }
-  function startLevel() {
-    if (started) return;
-    started = true;
-    briefingEl?.classList.add("hidden");
-    fp.attach();
-    timeLeft = TOTAL_TIME;
-    timerRunning = true;
-    updateClock();
-    showTutorial("Memories are surfacing — the clock's short. Bank all three before 0:00!", 6500);
-  }
-  briefingStartBtn?.addEventListener("click", startLevel);
-
-  function showTutorial(text, ms = 5500) {
-    if (!tutorialEl) return;
-    clearTimeout(tutorialTimer);
-    tutorialEl.textContent = text;
-    tutorialEl.classList.remove("hidden");
-    if (ms > 0) tutorialTimer = setTimeout(() => tutorialEl.classList.add("hidden"), ms);
-  }
-  function teachOnce(key, text, ms) {
-    if (taught.has(key)) return;
-    taught.add(key);
-    showTutorial(text, ms);
-  }
-
-  function setPower() {
-    const pct = Math.round((checkpointedCount() / artifacts.length) * 100);
-    // Vertical gauge — fills bottom-up and shifts color as memory is restored.
-    if (shipMeterFill) shipMeterFill.style.height = pct + "%";
-    if (shipMeterPct) shipMeterPct.textContent = pct + "%";
-    if (shipMeter) {
-      shipMeter.classList.toggle("lvl-low", pct > 0 && pct <= 34);
-      shipMeter.classList.toggle("lvl-mid", pct > 34 && pct < 100);
-      shipMeter.classList.toggle("lvl-high", pct >= 100);
+  function updateEffects(dt) {
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const e = effects[i];
+      e.life -= dt;
+      const k = Math.max(0, e.life / e.max);
+      if (e.kind === "bolt") e.obj.material.opacity = 0.9 * k;
+      else { e.obj.material.opacity = 0.95 * k; e.obj.scale.setScalar(1 + (1 - k) * 1.8); }
+      if (e.life <= 0) { scene.remove(e.obj); e.obj.geometry.dispose(); effects.splice(i, 1); }
     }
   }
-  function showCard(a, shipPct) {
-    if (!ckptCard) return;
-    ccId.textContent = a.id;
-    ccSummary.textContent = `Recovered: ${a.fragment.title}`;
-    ccAttrFill.style.width = shipPct + "%";
-    ccAttrText.textContent = `ship ${shipPct}% · you ${100 - shipPct}%`;
-    ckptCard.classList.remove("hidden");
-    clearTimeout(cardTimer);
-    cardTimer = setTimeout(() => ckptCard.classList.add("hidden"), 3800);
+  function flashScreen() {
+    document.body.classList.add("hit-flash");
+    setTimeout(() => document.body.classList.remove("hit-flash"), 160);
   }
 
-  function setControls(locked) {
-    if (!controlsEl) return;
-    if (locked === controlsLocked && !controlsEl.classList.contains("hidden")) return;
-    controlsLocked = locked;
-    controlsEl.innerHTML = `
-      <span class="control-item">
-        <span class="control-label">To move</span>
-        <span class="arrow-keys" aria-label="Arrow keys">
-          <span class="key key-up">↑</span>
-          <span class="key key-left">←</span>
-          <span class="key key-down">↓</span>
-          <span class="key key-right">→</span>
-        </span>
-      </span>
-      ${locked ? `
-        <span class="control-item">
-          <span class="control-label">To look around</span>
-          <span class="mouse-hint">
-            <span class="mouse-icon" aria-hidden="true"></span>
-            <span>move mouse</span>
-          </span>
-        </span>
-      ` : ""}
-      <span class="control-item">
-        <span class="control-label">Bird's-eye view</span>
-        <span class="key">M</span>
-      </span>
-      <span class="control-item">
-        <span class="control-label">Return to orbit</span>
-        <span class="key">B</span>
-      </span>
-    `;
-    controlsEl.classList.remove("hidden");
+  // ---------- banking flow ----------
+  function startBank(recordGroup) {
+    banking = true;
+    bankTarget = recordGroup;
+    bankState = "dormant";
+    buffer = "";
+    // The shot record stops mid-air where you hit it and hangs there, glowing,
+    // while you bank it — NO ice yet. The rain keeps falling around you (records
+    // you can't grab while your hands are on the keyboard slip past). It only
+    // freezes into ice once you `git commit` it (see advanceBank).
+    spawnSpark(recordGroup.position.clone(), 0xffd27a);
+    if (!bankLessonComplete) pauseForBankLesson();
+    else openTerminal();
   }
-  function hideControls() {
-    controlsLocked = null;
-    controlsEl?.classList.add("hidden");
+  // git commit = freeze the change → encase the held record in ice.
+  function freezeBankTarget() {
+    if (!bankTarget || bankIce) return;
+    const ice = makeIceBlock();
+    ice.position.copy(bankTarget.position);
+    ice.scale.setScalar(1.5);
+    fallGroup.add(ice);
+    bankIce = ice;
+    spawnSpark(bankTarget.position.clone(), 0xbfe9ff);
   }
-
-  function setModelOpacity(model, o) {
-    model.traverse((n) => {
-      if (n.material) { n.material.transparent = o < 1; n.material.opacity = o; }
-    });
+  function clearBankPiece() {
+    if (bankTarget) { fallGroup.remove(bankTarget); bankTarget = null; }
+    if (bankIce) { fallGroup.remove(bankIce); bankIce = null; }
   }
-
-  // ---------- terminal ----------
   function currentStep() {
     if (reviewMode) return REVIEW_STEP;
-    if (!termTarget) return null;
-    return STEPS[termTarget.state] || null;
+    return STEPS[bankState] || null;
+  }
+  function openTerminal() {
+    terminalOpen = true;
+    termMsg?.classList.remove("show-ok", "show-err");
+    termList?.classList.add("hidden");
+    termEl?.classList.remove("hidden");
+    renderTerminal();
+  }
+  function closeTerminal() {
+    terminalOpen = false;
+    termEl?.classList.add("hidden");
   }
   function renderTerminal() {
     const step = currentStep();
     if (!step) return;
-
     if (reviewMode && listShown) {
       termHint.textContent = "# entire checkpoint list";
       termInput.textContent = "entire checkpoint list";
@@ -468,9 +569,6 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
       return;
     }
     termList?.classList.add("hidden");
-
-    // The hint is just the "why"; the actionable command/keys live in the CTA
-    // below the input line, where they're the most prominent thing on screen.
     termHint.textContent = step.hint ? `# ${step.hint}` : "";
     if (step.type === "confirm") {
       termInput.textContent = `${step.question}  [y/n]`;
@@ -478,7 +576,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
       if (termCta) termCta.innerHTML =
         `<span class="cta-label">PRESS</span>` +
         `<kbd class="cta-key cta-key-yes">Y</kbd><span class="cta-note">link checkpoint</span>` +
-        `<kbd class="cta-key cta-key-no">N</kbd><span class="cta-note">skip</span>`;
+        `<kbd class="cta-key cta-key-no">N</kbd><span class="cta-note">no point</span>`;
     } else {
       termInput.textContent = buffer;
       termInput.classList.remove("is-dim");
@@ -494,151 +592,234 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
     termMsg.classList.add(ok ? "show-ok" : "show-err");
     msgTimer = setTimeout(() => termMsg.classList.remove("show-ok", "show-err"), 2400);
   }
-  function openTerminal(a) {
-    if (terminalOpen) return;
-    terminalOpen = true;
-    termTarget = a;
-    buffer = "";
-    fp.detach();                      // freeze movement; keystrokes feed the terminal
-    termMsg?.classList.remove("show-ok", "show-err");
-    termList?.classList.add("hidden");
-    termEl?.classList.remove("hidden");
-    renderTerminal();
-  }
-  function closeTerminal(dismiss) {
-    if (!terminalOpen) return;
-    if (dismiss && termTarget) dismissedMemory = termTarget;
-    terminalOpen = false;
-    termTarget = null;
-    buffer = "";
-    termEl?.classList.add("hidden");
-    if (active) fp.attach();          // resume walking (addEventListener dedupes)
-  }
   function submitCommand() {
     const step = currentStep();
     if (!step || step.type !== "command" || listShown) return;
     if (cmdMatches(buffer, step.accept)) {
+      const teaching = lessonPaused;
       buffer = "";
       if (reviewMode) { showCheckpointList(); return; }
-      runStep(termTarget);            // dormant → stage, recovered → commit
-      flashTerminal("✓ ok", true);
-      renderTerminal();
+      advanceBank();
+      if (!teaching) {
+        flashTerminal("ok", true);
+        renderTerminal();
+      }
     } else {
-      flashTerminal(`command not recognized — try:  ${step.cmd}`, false);
+      flashTerminal(`command not recognized. try: ${step.cmd}`, false);
       buffer = "";
       renderTerminal();
+    }
+  }
+  function advanceBank() {
+    if (bankState === "dormant") {
+      bankState = "recovered";
+      if (lessonPaused) {
+        closeTerminal();
+        lessonNarrating = true;
+        renderBankLesson();
+      }
+    } else if (bankState === "recovered") {
+      bankState = "frozen";
+      freezeBankTarget();   // the commit freezes it into ice
+      if (lessonPaused) {
+        closeTerminal();
+        lessonNarrating = true;
+        renderBankLesson();
+      }
+    }
+  }
+  function confirmCheckpoint(yes) {
+    if (bankState !== "frozen") return;
+    const teaching = lessonPaused;
+    if (!yes) {
+      clearBankPiece();
+      banking = false;
+      bankState = "done";
+      closeTerminal();
+      if (teaching) {
+        finishBankLesson();
+        showModePrompt("level");
+      }
+      return;
+    }
+    const frag = FRAGMENTS[banked % FRAGMENTS.length];
+    const id = genCheckpointId();
+    bankedRecords.push({ frag, id });
+    banked += 1;
+    updateTally();
+
+    // shatter the ice + dismiss the banked record with a little sparkle
+    if (bankTarget) spawnSpark(bankTarget.position.clone(), 0x8fe3ff);
+    clearBankPiece();
+    banking = false;
+    bankState = "done";
+    closeTerminal();
+    if (teaching) {
+      finishBankLesson();
+      showModePrompt("level");
     }
   }
   function showCheckpointList() {
     listShown = true;
-    timerRunning = false;            // the run is complete — NOW the clock stops
+    timerRunning = false;
     countdownEl?.classList.remove("is-low", "is-critical");
     if (termList) {
-      termList.innerHTML = artifacts.map((a) =>
+      termList.innerHTML = bankedRecords.map(({ frag, id }) =>
         `<div class="term-list-row"><span class="tl-id">` +
-        `<span class="tl-key">Entire-Checkpoint:</span> ${a.id}</span>` +
-        `<span class="tl-title">recovered: ${a.fragment.title}</span></div>`
+        `<span class="tl-key">Entire-Checkpoint:</span> ${id}</span>` +
+        `<span class="tl-title">recovered: ${frag.title}</span></div>`
       ).join("");
     }
-    flashTerminal(`${artifacts.length} checkpoints linked · ship memory restored`, true);
-    showTutorial("Memory restored — and something just woke up. Press Esc to close the terminal, then Enter to investigate.", 0);
+    flashTerminal(`${banked} checkpoints linked · ship memory restored`, true);
+    showTutorial("Memory restored. The drone bay just woke up. Press Enter to investigate · B for orbit.", 0);
     renderTerminal();
-    onComplete?.();                  // Level 1 cleared — unlocks Level 2 in orbit
+    onComplete?.();
   }
 
-  // ---------- state transitions ----------
-  function runStep(a) {
-    if (a.state === "dormant") stage(a);
-    else if (a.state === "recovered") commit(a);
+  // ---------- end of run ----------
+  // The clock hit 0:00 — branch on whether the minimum was cleared.
+  function endRun() {
+    timerRunning = false;
+    countdownEl?.classList.remove("is-low", "is-critical");
+    // a record mid-bank when time expired doesn't count
+    banking = false;
+    clearBankPiece();
+    if (banked >= MIN_TO_PASS) passRun();
+    else failRun();
   }
-  function stage(a) {
-    a.state = "recovered";
-    teachOnce("staged",
-      "Recovered and staged. Run `git commit` to freeze it — the clock is ticking.");
+  function passRun() {
+    clearFalling();
+    reviewMode = true;
+    openTerminal();             // → review step: type `entire checkpoint list`
+    showTutorial(`Time. ${banked} records recovered. Run \`entire checkpoint list\` to review your haul.`, 0);
   }
-  function commit(a) {
-    a.state = "frozen";
-    setModelOpacity(a.model, 1);
-    const ice = makeIceBlock();
-    ice.position.y = a.model.position.y + 0.6;
-    a.iceY = ice.position.y;
-    a.anchor.add(ice);
-    a.ice = ice;
-    teachOnce("committed",
-      "Committed and frozen — locked in. Now Entire offers to link a checkpoint: press y to capture the session behind this commit.");
+  function failRun() {
+    failed = true;
+    closeTerminal();
+    tutorialEl?.classList.add("hidden");
+    if (lfTitle) lfTitle.textContent = "NOT ENOUGH MEMORY";
+    if (lfSub) lfSub.textContent =
+      `You recovered ${banked}. The ship needs at least ${MIN_TO_PASS} to power up.`;
+    levelFail?.classList.remove("hidden");
   }
-  function confirmCheckpoint(yes) {
-    const a = termTarget;
-    if (!a || a.state !== "frozen") return;
-    if (!yes) {
-      flashTerminal("declined — without a checkpoint the ship can't track this commit. re-approach to link it.", false);
-      closeTerminal(true);
-      return;
-    }
-    checkpoint(a);
-    if (allLinked()) {
-      reviewMode = true;             // clock KEEPS running — the list is the finish line
-      shipMeter?.classList.add("is-full");
-      showTutorial("All banked! Now type `entire checkpoint list` before the clock hits 0:00 — hurry!", 0);
-      renderTerminal();              // stay open → review step
-    } else {
-      closeTerminal(false);
-    }
+  function resetLevel() {
+    failed = false;
+    levelFail?.classList.add("hidden");
+    clearFalling();
+    clearBankPiece();
+    banking = false;
+    reviewMode = false;
+    listShown = false;
+    bankState = "dormant";
+    buffer = "";
+    banked = 0;
+    bankedRecords.length = 0;
+    updateTally();
+    spawnTimer = 0;
+    timeLeft = TOTAL_TIME;
+    timedRunStarted = false;
+    timerRunning = false;
+    updateClock();
+    hideBankLesson();
+    hideModePrompt();
+    lessonPaused = false;
+    lessonNarrating = false;
+    showModePrompt(bankLessonComplete ? "level" : "tutorial");
   }
-  function checkpoint(a) {
-    a.state = "checkpointed";
-    a.id = genCheckpointId();
-    const shipPct = 62 + Math.floor(Math.random() * 23); // 62–84%
 
-    if (a.ice) {
-      a.ice.material.emissive.setHex(0x2a6c8a);
-      a.ice.material.emissiveIntensity = 1.1;
-      const core = new THREE.PointLight(0x8fe3ff, 6, 26, 2);
-      core.position.copy(a.ice.position);
-      a.anchor.add(core);
-      a.core = core;
-    }
-    const spr = makeIdSprite(a.id);
-    spr.position.y = a.iceY + 5;
-    a.anchor.add(spr);
-    a.idSprite = spr;
-
-    showCard(a, shipPct);
-    setPower();
-    teachOnce("checkpointed",
-      "Checkpoint linked — Entire stamps it onto the commit via an `Entire-Checkpoint` trailer, and the ship remembers a little more.");
+  // ---------- briefing ----------
+  function showBriefing() {
+    timerRunning = false;
+    tutorialEl?.classList.add("hidden");
+    briefingIndex = 0;
+    renderBriefingBeat();
+    briefingEl?.classList.remove("hidden");
   }
+  function startLevel() {
+    if (started) return;
+    started = true;
+    if (modePrompt) {
+      modePrompt.classList.add("hidden");
+      delete modePrompt.dataset.mode;
+    }
+    modePromptState = null;
+    modeAction?.blur();
+    briefingEl?.classList.add("hidden");
+    timeLeft = TOTAL_TIME;
+    timedRunStarted = false;
+    timerRunning = false;
+    updateTally();
+    updateClock();
+    refreshHud();
+  }
+  briefingEl?.addEventListener("click", advanceBriefing);
+  modeAction?.addEventListener("click", acceptModePrompt);
 
   // ---------- input ----------
-  function onCanvasClick() {
-    if (!started) return;                 // briefing up — ignore world clicks
-    if (active && !fp.isLocked) fp.lock();
+  function onMouseMove(e) {
+    mouseClient = { x: e.clientX, y: e.clientY };
+    ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
+    ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    if (reticle) {
+      reticle.style.left = e.clientX + "px";
+      reticle.style.top = e.clientY + "px";
+    }
+  }
+  function onMouseDown(e) {
+    if (!active || e.button !== 0) return;
+    if (visibleModePromptKind()) return;
+    if (lessonPaused && lessonNarrating) {
+      openBankLessonTerminal();
+      return;
+    }
+    fire();
   }
   function onKeyDown(e) {
     if (!active) return;
 
-    // Landing briefing is up — Enter/Space begins the run, nothing else.
-    if (!started) {
-      if (e.code === "Enter" || e.code === "Space") { startLevel(); e.preventDefault(); }
+    if (visibleModePromptKind()) {
+      if (e.code === "Enter" || e.code === "Space") {
+        acceptModePrompt();
+        e.preventDefault();
+        return;
+      }
+      if (e.code === "KeyB") {
+        onExit?.();
+        return;
+      }
+      if (e.code !== "KeyB") e.preventDefault();
       return;
     }
 
-    // The run failed — only R (retry) does anything.
+    if (!started) {
+      if (e.code === "Enter" || e.code === "Space") { advanceBriefing(); e.preventDefault(); }
+      return;
+    }
     if (failed) {
       if (e.code === "KeyR") { resetLevel(); e.preventDefault(); }
       return;
     }
-
-    // While the terminal is open, all keys feed it.
-    if (terminalOpen) {
-      if (e.code === "Escape") {
-        // No bailing on the final review — the clock is still ticking.
-        if (reviewMode && !listShown) { e.preventDefault(); return; }
-        closeTerminal(true); e.preventDefault(); return;
+    if (lessonPaused && lessonNarrating) {
+      if (e.code === "Enter" || e.code === "Space") {
+        openBankLessonTerminal();
+        e.preventDefault();
+        return;
       }
-      if (reviewMode && listShown) { e.preventDefault(); return; } // only Esc closes the list
+      if (e.code !== "KeyB") {
+        e.preventDefault();
+        return;
+      }
+    }
 
+    // Terminal is open — banking a record or running the final list.
+    if (terminalOpen) {
       const step = currentStep();
+      if (reviewMode && listShown) {
+        // run complete — only Enter (forward) / B (orbit) matter
+        if (e.code === "Enter") { onNext?.(); e.preventDefault(); }
+        if (e.code === "KeyB") { onExit?.(); }
+        return;
+      }
       if (step?.type === "confirm") {
         if (e.key === "y" || e.key === "Y") { confirmCheckpoint(true); e.preventDefault(); return; }
         if (e.key === "n" || e.key === "N") { confirmCheckpoint(false); e.preventDefault(); return; }
@@ -656,175 +837,178 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, devStar
       return;
     }
 
-    // Walking around (terminal closed).
-    // Level cleared → Enter carries you forward; failure never does (R only).
-    if (listShown && e.code === "Enter") { onNext?.(); e.preventDefault(); return; }
-    if (e.code === "KeyM") { setMap(!overhead.on); e.preventDefault(); return; }
-    if (e.code === "Escape" && fp.isLocked) fp.unlock();
-    if (e.code === "KeyB") onExit?.();
-  }
-  fp.controls.addEventListener("lock", () => crosshair?.classList.remove("hidden"));
-  fp.controls.addEventListener("unlock", () => crosshair?.classList.add("hidden"));
-
-  // ---------- HUD per-frame ----------
-  function refreshHud() {
-    if (!started || terminalOpen) {     // briefing up or terminal open → no walk HUD
-      setPrompt(null);
-      hideControls();
-      hideActionBar();
-      return;
-    }
-    setControls(fp.isLocked);
-    hideActionBar();
-    if (overhead.on) { setPrompt("Bird's-eye view — ↑↓←→ to move · M to return"); return; }
-    if (devLevel2) {
-      setPrompt(fp.isLocked ? "Level 2 dev start — press B to return to orbit" : "Click to look around");
-      return;
-    }
-    if (!fp.isLocked) { setPrompt("Click to look around"); return; }
-    if (listShown) { setPrompt("Memory restored — a new signal woke the drone bay. Enter to investigate · B for orbit"); return; }
-    setPrompt("Find the surfacing memory");
+    if (e.code === "KeyB") { onExit?.(); }
   }
 
   // ---------- per-frame ----------
-  function update(dt, t) {
-    fp.update(dt);
+  function refreshHud() {
+    const promptMode = visibleModePromptKind();
+    const aiming = started && !terminalOpen && !failed && !lessonPaused && !promptMode;
+    reticle?.classList.toggle("hidden", !aiming);
+    crosshair?.classList.add("hidden");
+    canvas.style.cursor = aiming ? "none" : "default";
+    tallyEl?.classList.toggle("hidden", !started);
+    if (!started || terminalOpen || failed || lessonPaused || promptMode) { setPrompt(null); return; }
+    setPrompt("Aim with the mouse · click to fire · B for orbit");
+  }
 
-    // Level countdown — one clock for the whole run.
-    if (active && timerRunning && !failed) {
+  function update(dt, t) {
+    // Aim the cannon at the cursor's point on the falling plane.
+    raycaster.setFromCamera(ndc, camera);
+    if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) {
+      cannon.lookAt(aimPoint);
+    }
+
+    // Level countdown.
+    if (active && timerRunning && !failed && !lessonPaused) {
       timeLeft = Math.max(0, timeLeft - dt);
       updateClock();
-      if (timeLeft <= 0) failLevel();
+      if (timeLeft <= 0) endRun();
     }
-    applyPanicSky();   // the sky reacts to the clock every frame
+    applyPanicSky();
 
-    // Nearest memory within reach (ignoring height).
-    let nearest = null, nd = Infinity;
-    for (const a of artifacts) {
-      const dx = camera.position.x - a.anchor.position.x;
-      const dz = camera.position.z - a.anchor.position.z;
-      const d = Math.hypot(dx, dz);
-      if (d < nd) { nd = d; nearest = a; }
-    }
-    target = nd <= INTERACT_DIST ? nearest : null;
-
-    // Auto open/close the ship's terminal as you reach a memory.
-    // (In review mode the terminal is driven manually, so leave it alone.)
-    if (active && started && !reviewMode && !failed && !devLevel2) {
-      if (dismissedMemory && target !== dismissedMemory) dismissedMemory = null;
-      const canOpen = target && target.state !== "checkpointed" && target !== dismissedMemory;
-      if (canOpen && !terminalOpen) openTerminal(target);
-      else if (!canOpen && terminalOpen) closeTerminal(false);
-    }
-
-    for (const a of artifacts) {
-      // Melting away after a time-out — sink and fade, then disappear.
-      if (a.melting) {
-        a.meltT = Math.max(0, a.meltT - dt);
-        const k = a.meltT / MELT_DUR;
-        setModelOpacity(a.model, k);
-        a.model.position.y -= dt * 2.4;
-        if (a.ice) a.ice.material.opacity = 0.62 * k;
-        a.beam.visible = false;
-        a.glow.visible = false;
-        continue;
+    // Spawn + fall (paused while banking or after the run ends).
+    // The rain keeps falling even while you bank — that's the cost of stopping
+    // to type. (Only pause it once the run is over.)
+    const raining = started && !reviewMode && !failed && !listShown && !lessonPaused && !visibleModePromptKind();
+    if (raining) {
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        spawnDrop();
+        spawnTimer = lerp(SPAWN_MAX, SPAWN_MIN, difficulty());
       }
-
-      const encased = a.state === "frozen" || a.state === "checkpointed";
-
-      // Idle spin/bob until the memory is encased in ice.
-      if (!encased) {
-        a.model.rotation.y += dt * 0.6;
-        a.model.position.y = 1.4 + Math.sin((t + a.bobOff) * 1.5) * 0.4;
-        setModelOpacity(a.model, 1);
+    }
+    for (let i = falling.length - 1; i >= 0; i--) {
+      const f = falling[i];
+      if (raining) f.group.position.y -= f.vy * dt;
+      const spin = f.group.userData.spin;
+      const spinTarget = f.group.userData.spinTarget || f.group;
+      if (spin) {
+        spinTarget.rotation.x += spin.x * dt;
+        spinTarget.rotation.y += spin.y * dt;
+        spinTarget.rotation.z += spin.z * dt;
       }
-
-      // Beam + glow: bright while findable, gone once frozen.
-      const lit = a.state === "dormant" || a.state === "recovered";
-      let o = 0;
-      if (a.state === "dormant") o = 0.4 + Math.sin(t * 2) * 0.12;
-      else if (a.state === "recovered") o = 0.22;
-      a.beam.material.opacity = o;
-      a.beam.visible = o > 0.01;
-      a.glow.visible = lit;
+      if (f.kind === "record") {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 5 + f.group.position.x * 0.13);
+        if (f.group.userData.badge) f.group.userData.badge.material.opacity = 0.78 + pulse * 0.18;
+        if (f.group.userData.trail) f.group.userData.trail.material.opacity = 0.28 + pulse * 0.18;
+        if (f.group.userData.beacon) f.group.userData.beacon.intensity = 2.2 + pulse * 1.3;
+      }
+      if (f.group.position.y <= DESPAWN_Y) removeFalling(f);
     }
 
-    overhead.update(t);
-    if (terminalOpen) renderTerminal(); // reflect fade-driven state changes
+    // The shot record hangs frozen in ice while you bank it — a slow turn
+    // inside the crystal so it reads as captured, not falling.
+    if (bankTarget) {
+      const spinTarget = bankTarget.userData.spinTarget || bankTarget;
+      spinTarget.rotation.y += dt * 0.35;
+    }
+
+    updateEffects(dt);
+
+    // Camera shake on a bad hit.
+    if (shakeT > 0) {
+      shakeT = Math.max(0, shakeT - dt);
+      const s = shakeT * 4;
+      camera.position.x = Math.sin(t * 90) * s;
+      camera.position.y = 24 + Math.cos(t * 80) * s;
+    } else if (camera.position.x !== 0 || camera.position.y !== 24) {
+      camera.position.x = 0;
+      camera.position.y = 24;
+    }
+
     if (active) refreshHud();
   }
 
   // ---------- lifecycle ----------
   function enter() {
     active = true;
-    fp.groundAt(0, terrain.radius * 0.75);
-    camera.lookAt(0, terrain.heightAt(0, 0) + 6, 0);
-    canvas.addEventListener("click", onCanvasClick);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mousedown", onMouseDown);
     window.addEventListener("keydown", onKeyDown);
     islandHud?.classList.remove("hidden");
-    islandHud?.classList.toggle("is-level2-dev", devLevel2);
-    devLevelBadge?.classList.toggle("hidden", !devLevel2);
     fpShared?.classList.remove("hidden");
-    setControls(false);
     crosshair?.classList.add("hidden");
-    setPower();
-    if (devLevel2) {
-      seedLevel2DevState();
-      fp.attach();
-      showTutorial("Level 2 dev mode — Level 1 checkpoints are preloaded.", 0);
-    } else if (!started) {          // fresh landing — read the briefing, then START
-      showBriefing();
-    } else if (listShown) {         // truly done — the list has been run
-      fp.attach();
-      timerRunning = false;
-      showTutorial("Memory restored — press Enter to answer the new signal, or B for orbit.", 0);
-    } else if (failed) {
-      resetLevel();                 // came back after a wipe → fresh run
-    } else {
-      fp.attach();
-      timerRunning = true;          // resume the level clock
-      if (reviewMode) {             // resume the timed final review
-        openTerminal(artifacts[0]); // termTarget unused in review; reopens the prompt
-        showTutorial("Type `entire checkpoint list` before the clock hits 0:00!", 0);
+    updateTally();
+    if (modePromptState) showModePrompt(modePromptState);
+    else if (!started) showBriefing();
+    else if (banking) {
+      if (lessonPaused) {
+        timerRunning = false;
+        if (lessonNarrating) {
+          closeTerminal();
+          renderBankLesson();
+        } else {
+          hideBankLesson();
+          openTerminal();
+        }
       } else {
-        showTutorial("Memories are surfacing — the clock's short. Bank all three before 0:00!", 6500);
+        timerRunning = timedRunStarted;
+        openTerminal();
       }
     }
+    else if (listShown) {
+      timerRunning = false;
+      showTutorial("Memory restored. Press Enter to answer the new signal, or B for orbit.", 0);
+    } else if (failed) {
+      resetLevel();
+    } else {
+      timerRunning = timedRunStarted;
+    }
     updateClock();
-    applyPanicSky();   // start on the right sky (calm unless we resumed low on time)
+    applyPanicSky();
   }
   function exit() {
     active = false;
-    timerRunning = false;           // pause the clock while in orbit
-    setMap(false);
-    closeTerminal(false);
-    fp.unlock();
-    fp.detach();
-    canvas.removeEventListener("click", onCanvasClick);
+    timerRunning = false;
+    closeTerminal();
+    canvas.style.cursor = "default";
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mousedown", onMouseDown);
     window.removeEventListener("keydown", onKeyDown);
     setPrompt(null);
-    hideControls();
-    hideActionBar();
+    reticle?.classList.add("hidden");
+    tallyEl?.classList.add("hidden");
     tutorialEl?.classList.add("hidden");
-    ckptCard?.classList.add("hidden");
+    hideBankLesson();
+    modePrompt?.classList.add("hidden");
     termEl?.classList.add("hidden");
     levelFail?.classList.add("hidden");
     briefingEl?.classList.add("hidden");
     islandHud?.classList.add("hidden");
-    islandHud?.classList.remove("is-level2-dev");
-    devLevelBadge?.classList.add("hidden");
     fpShared?.classList.add("hidden");
-    crosshair?.classList.add("hidden");
   }
   function resize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    overhead.resize();
   }
 
-  return {
-    scene,
-    get camera() { return overhead.on ? overhead.camera : camera; },
-    update, enter, exit, resize,
-  };
+  return { scene, get camera() { return camera; }, update, enter, exit, resize };
+}
+
+// ---------- backdrop meshes ----------
+
+// The salvage cannon: a swivel base + a barrel that points down its local +Z.
+function buildCannon() {
+  const g = new THREE.Group();
+  const body = new THREE.MeshStandardMaterial({ color: 0x3a4049, metalness: 0.8, roughness: 0.4, flatShading: true });
+  const accent = new THREE.MeshStandardMaterial({ color: 0xffb86b, emissive: 0x6a4310, emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.3 });
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.2, 2, 18), body);
+  g.add(base);
+  const yoke = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12), body);
+  yoke.position.y = 1.2;
+  g.add(yoke);
+
+  // barrel along +Z
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 5.2, 16), body);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 1.2, 2.4);
+  g.add(barrel);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.7, 0.8, 16), accent);
+  tip.rotation.x = Math.PI / 2;
+  tip.position.set(0, 1.2, 5.1);
+  g.add(tip);
+
+  return g;
 }

@@ -122,6 +122,7 @@
       <!-- First-person HUD shared by both island levels -->
       <div id="fp-shared" class="hidden">
         <div id="crosshair" class="hidden"></div>
+        <div id="shooter-reticle" class="hidden"></div>
 
         <!-- Teaching line; scaffolds the first of each action, then goes quiet -->
         <div id="tutorial" class="hidden"></div>
@@ -152,79 +153,56 @@
           <strong>LEVEL 2</strong>
         </div>
 
-        <!-- Landing briefing — shown on arrival; the clock waits for START -->
-        <div id="briefing" class="hidden">
-          <div class="bf-card">
-            <div class="bf-tag">SIGNAL LOST · LEVEL 1</div>
-            <h1 class="bf-title">First Memories</h1>
-            <p class="bf-story">
-              You've crash-landed on a lavender world. The impact scattered the
-              ship's memory across the island — each fragment a piece of what
-              happened here. Recover them before they're lost for good — restore
-              enough and the ship can take you home.
-            </p>
-            <div class="bf-mission">
-              <div class="bf-mission-head">YOUR MISSION</div>
-              <ol class="bf-steps">
-                <li>Walk up to a glowing memory — the ship's terminal opens.</li>
-                <li>Type <code>git add</code>, then <code>git commit</code> to freeze it in ice.</li>
-                <li>When Entire offers, press <code>y</code> to link a <strong>checkpoint</strong> — that's what restores it to the ship's memory.</li>
-                <li>Bank all three, then run <code>entire checkpoint list</code> before the clock hits <strong>0:00</strong>.</li>
-              </ol>
+        <!-- Landing briefing — story-style mission beats; the clock waits. -->
+        <div id="briefing" class="mission-banner hidden">
+          <div class="mission-banner-box">
+            <div class="mission-kicker">SIGNAL LOST · LEVEL 1</div>
+            <div id="briefing-text" class="mission-banner-text"></div>
+            <div class="mission-banner-cue">
+              <span class="bf-key">Space</span>
+              <span id="briefing-next">to continue</span>
             </div>
-            <div class="bf-controls">
-              <div class="bf-mission-head">CONTROLS</div>
-              <div class="bf-ctrl-grid">
-                <span class="bf-ctrl">
-                  <span class="bf-keys"><span class="bf-key">↑</span><span class="bf-key">←</span><span class="bf-key">↓</span><span class="bf-key">→</span></span>
-                  move <span class="bf-dim">(or WASD)</span>
-                </span>
-                <span class="bf-ctrl">
-                  <span class="bf-key">mouse</span> look around <span class="bf-dim">(click to capture)</span>
-                </span>
-                <span class="bf-ctrl">
-                  <span class="bf-key">M</span> bird's-eye view
-                </span>
-                <span class="bf-ctrl">
-                  <span class="bf-key">B</span> return to orbit
-                </span>
-              </div>
-            </div>
-            <p class="bf-warn">The countdown is short and the sky turns against you. Anything not banked in time melts away.</p>
-            <button id="briefing-start" type="button">LAND &amp; BEGIN</button>
-            <div class="bf-hint">or press <span class="bf-key">Enter</span></div>
           </div>
         </div>
 
-        <!-- Level countdown — one clock for the whole run; bank all before 0:00 -->
+        <!-- Mode prompt — title-screen-style transition between story/tutorial/play. -->
+        <div id="level-mode-prompt" class="level-mode-prompt hidden">
+          <div class="level-mode-menu">
+            <button id="level-mode-action" class="ts-item is-selected" type="button">START TUTORIAL</button>
+            <div id="level-mode-note" class="level-mode-note">First record is practice. The clock stays off.</div>
+            <div class="level-mode-cue"><span class="bf-key">Space</span> to select</div>
+          </div>
+        </div>
+
+        <!-- First recovered record lesson — same voice, stepped one action at a time. -->
+        <div id="mission-lesson" class="mission-lesson hidden">
+          <div class="mission-banner-box mission-lesson-box">
+            <div id="mission-lesson-kicker" class="mission-kicker">RECORD FOUND</div>
+            <div id="mission-lesson-title" class="mission-lesson-title"></div>
+            <div id="mission-lesson-text" class="mission-banner-text"></div>
+            <div id="mission-lesson-cue" class="mission-lesson-cue"></div>
+          </div>
+        </div>
+
+        <!-- Level countdown — one clock for the whole run; collect before 0:00 -->
         <div id="countdown">
           <span class="cd-label">TIME</span>
-          <span id="countdown-time">0:45</span>
+          <span id="countdown-time">0:40</span>
         </div>
 
-        <!-- Ship memory meter — the level goal; only checkpoints fill it -->
-        <div id="ship-meter">
-          <span class="meter-label">SHIP MEMORY</span>
-          <span class="meter-track"><span id="ship-meter-fill"></span></span>
-          <span id="ship-meter-pct">0%</span>
-        </div>
-
-        <!-- Checkpoint record card (the middle-ground "anatomy") -->
-        <div id="ckpt-card" class="hidden">
-          <div class="cc-head">CHECKPOINT LINKED</div>
-          <div class="cc-summary" id="cc-summary"></div>
-          <div class="cc-attr">
-            <span class="cc-attr-bar"><span id="cc-attr-fill"></span></span>
-            <span id="cc-attr-text"></span>
+        <!-- Score readout — records recovered / minimum, with a fill bar -->
+        <div id="shooter-tally" class="hidden">
+          <div class="st-row">
+            <span class="st-label">RECORDS</span>
+            <span class="st-score"><span id="st-count">0</span><span class="st-slash">/</span><span id="st-min">4</span></span>
           </div>
-          <div class="cc-trailer">commit trailer&nbsp;·&nbsp;Entire-Checkpoint: <span id="cc-id"></span></div>
-          <div class="cc-foot">+ restored to ship memory</div>
+          <span class="st-bar"><span id="st-fill"></span></span>
         </div>
 
-        <!-- Time-out fail screen -->
+        <!-- Time-out fail screen (text set in JS — depends how close you got) -->
         <div id="level-fail" class="hidden">
-          <div class="lf-title">MEMORIES MELTED</div>
-          <div class="lf-sub">The clock ran out before you banked them all.</div>
+          <div class="lf-title" id="lf-title">NOT ENOUGH MEMORY</div>
+          <div class="lf-sub" id="lf-sub">The ship needs more records to power up.</div>
           <div class="lf-hint">press <span class="lf-key">R</span> to try again</div>
         </div>
       </div>
