@@ -497,17 +497,16 @@ gesture that unblocks music autoplay — the "press start" beat is real.
 ### Story intro (reworked 2026-06-14)
 The original storybook-narrator intro was rejected as not game-like — it
 *described the world* but never talked to the player or gave a mission. START
-GAME now plays a **6-beat radio transmission from the rebellion**, addressed
+GAME now plays a **3-beat radio transmission from the rebellion**, addressed
 to the downed pilot (the player), in the full-width story bar (Space/Enter/
 click advance, Esc skips, last beat cues "to begin"), then drops into orbit.
 It hands the player a mission and ends promoting "Pilot" → "rebel". The
 transmission ("if you can read this") *is* the NPC — gives "someone needs you"
 without a character to build. Beats (`STORY_BEATS` in titleScreen.js): ship
-survived but needs repairs → you left home to join the rebellion (a place
-where humans and agents work together) → the ship runs on **mission records**
-(flight paths, system checks, repair logs, pilot commands) → the crash
-scattered them across the planet → without them the ship can't run → fix the
-ship to join us, *see you soon, rebel*. Tagline: **THE REBELLION IS WAITING**.
+survived the crash but needs repairs → the ship's records are scattered across
+the planet → recover records, repair the ship, click the landing marker,
+*see you soon, rebel*. Tagline:
+**THE REBELLION IS WAITING**.
 
 Story rules (updated):
 - **The speaker is the rebellion**, by radio, addressing the player — a

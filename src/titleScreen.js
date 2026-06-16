@@ -4,17 +4,12 @@
 // this menu and the in-game panel can never disagree.
 // The opening story — a transmission from the rebellion, addressed to the
 // downed pilot (the player). It hands the player a mission without naming any
-// gameplay so the levels can change underneath it. "Mission records" defines
-// the ship's session history in plain, concrete terms (flight paths, repair
-// logs, pilot commands). Ends by promoting "Pilot" to "rebel".
+// gameplay so the levels can change underneath it. In three beats, it explains
+// the crash, gives the mission, and ends by promoting "Pilot" to "rebel".
 const STORY_BEATS = [
-  "Pilot, if you can read this, the ship survived, but it needs repairs.",
-  "You left your home planet to join the rebellion. The rebellion is building a place where humans and agents work together.",
-  "Your ship runs on mission records: flight paths, system checks, repair logs, and pilot commands.",
-  "When the ship went down, those records broke apart and scattered across this planet.",
-  "Without them, your ship cannot run.",
-  "Your mission: recover the records, repair the ship, and join us.",
-  "Click the landing marker on the planet to begin. See you soon, rebel.",
+  "Pilot, if you can read this, your ship survived the crash, but it needs repairs.",
+  "Your ship's records are scattered across the planet. Your mission: recover the records and repair the ship.",
+  "Click the landing marker to begin. See you soon, rebel.",
 ];
 
 import { sfx } from "./sfx.js";

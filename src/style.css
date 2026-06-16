@@ -211,7 +211,7 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 }
 #ts-volume-pct { min-width: 44px; text-align: right; }
 
-/* Story intro — the narrator beats after START GAME. The planet carries the
+/* Story intro — the radio beats after START GAME. The planet carries the
    scene: the heavy menu vignette lifts to a soft bottom shade behind the box. */
 #title-screen.is-story {
   background: linear-gradient(180deg, rgba(2, 4, 10, 0.12) 55%, rgba(2, 4, 10, 0.72));
