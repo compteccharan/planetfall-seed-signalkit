@@ -61,10 +61,7 @@ const SUN_CALM  = new THREE.Color(0xfff1dc);
 const SUN_PANIC = new THREE.Color(0xff5a3c);
 
 const BRIEFING_BEATS = [
-  "Pilot, records are falling through the sky.",
-  "Shoot the real records before they hit the ground.",
-  "Leave the wreckage alone. Bad hits cost you time.",
-  "Recover at least 4 before the clock runs out.",
+  "Shoot the gold records and avoid the wreckage.",
 ];
 
 const MODE_PROMPTS = {
@@ -88,22 +85,13 @@ const MODE_PROMPTS = {
 
 const BANK_LESSONS = {
   dormant: {
-    kicker: "STAGE IT",
-    title: "git add",
-    text: "Pull the record out of the wreckage and set it on the recovery clamp.",
-    cue: "press Space to stage",
+    parts: ["When the terminal opens, type ", { command: "git add" }, " to stage this record."],
   },
   recovered: {
-    kicker: "FREEZE IT",
-    title: "git commit",
-    text: "Lock it in. Now it cannot be lost.",
-    cue: "press Space to freeze",
+    parts: ["When the terminal opens, type ", { command: "git commit" }, " to save it as a snapshot."],
   },
   frozen: {
-    kicker: "REMEMBER IT",
-    title: "press y",
-    text: "File it into the ship's memory as a checkpoint. That makes it recoverable later.",
-    cue: "press Space to link",
+    parts: ["When the terminal prompts, press ", { command: "Y" }, " to link the snapshot to a checkpoint."],
   },
 };
 
@@ -341,13 +329,27 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
   function renderBankLesson() {
     const lesson = BANK_LESSONS[bankState];
     if (!lesson || !missionLesson) return;
-    if (missionLessonKicker) missionLessonKicker.textContent = lesson.kicker;
-    if (missionLessonTitle) missionLessonTitle.textContent = lesson.title;
+    if (missionLessonKicker) {
+      missionLessonKicker.textContent = lesson.kicker || "";
+      missionLessonKicker.classList.toggle("hidden", !lesson.kicker);
+    }
+    if (missionLessonTitle) {
+      missionLessonTitle.textContent = lesson.title || "";
+      missionLessonTitle.classList.toggle("hidden", !lesson.title);
+    }
     if (missionLessonText) {
-      missionLessonText.textContent = lesson.text;
+      missionLessonText.replaceChildren(...lesson.parts.map((part) => {
+        if (typeof part === "string") return document.createTextNode(part);
+        const command = document.createElement("span");
+        command.className = "mission-lesson-command";
+        command.textContent = part.command;
+        return command;
+      }));
       restartTextAnimation(missionLessonText);
     }
-    if (missionLessonCue) missionLessonCue.textContent = lesson.cue;
+    if (missionLessonCue) {
+      missionLessonCue.innerHTML = `<span class="bf-key">Space</span><span class="mission-lesson-next">to continue</span>`;
+    }
     missionLesson.classList.remove("hidden");
   }
   function hideBankLesson() {
@@ -790,7 +792,11 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
   }
   function onMouseDown(e) {
     if (!active || e.button !== 0) return;
-    if (visibleModePromptKind()) return;
+    if (visibleModePromptKind()) {
+      acceptModePrompt();
+      e.preventDefault();
+      return;
+    }
     if (lessonPaused && lessonNarrating) {
       openBankLessonTerminal();
       return;
@@ -801,16 +807,8 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
     if (!active) return;
 
     if (visibleModePromptKind()) {
-      if (e.code === "Enter" || e.code === "Space") {
-        acceptModePrompt();
-        e.preventDefault();
-        return;
-      }
-      if (e.code === "KeyB") {
-        onExit?.();
-        return;
-      }
-      if (e.code !== "KeyB") e.preventDefault();
+      acceptModePrompt();
+      e.preventDefault();
       return;
     }
 
@@ -872,7 +870,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
     canvas.style.cursor = aiming ? "none" : "default";
     tallyEl?.classList.toggle("hidden", !started);
     if (!started || terminalOpen || failed || lessonPaused || promptMode) { setPrompt(null); return; }
-    setPrompt("Aim with the mouse · click to fire · B for orbit");
+    setPrompt("Aim with the mouse · Click to fire");
   }
 
   function update(dt, t) {
