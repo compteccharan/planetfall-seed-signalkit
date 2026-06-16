@@ -733,9 +733,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext } = {}) 
     failed = true;
     closeTerminal();
     tutorialEl?.classList.add("hidden");
-    if (lfTitle) lfTitle.textContent = "NOT ENOUGH MEMORY";
+    if (lfTitle) lfTitle.textContent = "TIME'S UP";
     if (lfSub) lfSub.textContent =
-      `You recovered ${banked}. The ship needs at least ${MIN_TO_PASS} to power up.`;
+      `You only captured ${banked} of ${MIN_TO_PASS} records.`;
     levelFail?.classList.remove("hidden");
   }
   function resetLevel() {
