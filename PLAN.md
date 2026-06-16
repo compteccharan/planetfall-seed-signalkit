@@ -132,7 +132,7 @@ also appears stamped on the commit (ice block) so the link is visible.
 
 ### Pressure: one level countdown (not per-memory)
 A single **countdown clock** (top-left HUD, `TIME m:ss`) runs for the whole run
-— tuned **scary-tight** (`TOTAL_TIME`, currently **45s** for 3 memories;
+— tuned **scary-tight** (`TOTAL_TIME`, currently **48s** for 4 records;
 one-line tune in `islandView.js`). Bank every memory before it hits `0:00` or
 the run **fails**: every un-banked memory **melts away** (sinks + fades, ice
 included) and a "MEMORIES MELTED" screen offers **press R to try again** (full

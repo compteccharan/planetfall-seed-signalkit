@@ -24,7 +24,7 @@ import { sfx } from "./sfx.js";
 // MINIMUM to power the ship; anything above is bonus. Hard but not impossible:
 // each record costs the full git add/commit/link loop, so it's a race against
 // your own typing as much as the clock.
-const TOTAL_TIME = 40;       // seconds in the run
+const TOTAL_TIME = 48;       // seconds in the run
 const MIN_TO_PASS = 4;       // recover at least this many or the run fails
 const WRECK_PENALTY = 4;     // seconds lost for shooting wreckage
 const LOW_TIME = 15;         // clock turns urgent (red, pulsing) under this
