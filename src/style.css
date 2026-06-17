@@ -716,7 +716,8 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 #db-briefing.hidden,
 #lc-briefing.hidden { display: none; }
 
-#briefing.mission-banner {
+#briefing.mission-banner,
+#db-briefing.mission-banner {
   align-items: flex-end;
   justify-content: center;
   padding: 0;
@@ -790,6 +791,7 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 
 .mission-banner-cue .bf-key,
 .mission-banner-cue #briefing-next,
+.mission-banner-cue #db-briefing-next,
 .mission-lesson-cue .bf-key,
 .mission-lesson-cue .mission-lesson-next {
   background: linear-gradient(180deg, #ffe9b3 0%, #f6c763 52%, #d69e3a 100%);
@@ -1226,44 +1228,103 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 /* Fleet status panel — five systems, four states */
 #db-systems {
   position: absolute;
-  top: 136px;
-  left: 32px;
-  width: min(290px, calc(100vw - 64px));
-  padding: 12px 14px;
-  background: rgba(6, 11, 22, 0.78);
+  top: 88px;
+  right: 28px;
+  left: auto;
+  width: min(260px, calc(100vw - 56px));
+  padding: 10px 12px;
+  background: rgba(6, 11, 22, 0.68);
   border: 1px solid rgba(111, 227, 255, 0.32);
-  border-radius: 9px;
+  border-radius: 8px;
   backdrop-filter: blur(8px);
 }
 .db-sys-head {
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.22em;
   font-weight: 700;
   color: var(--accent);
-  margin-bottom: 9px;
+  margin-bottom: 7px;
 }
 .db-sys {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 3px 0;
-  font-size: 11px;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 9.8px;
   letter-spacing: 0.04em;
 }
-.db-sys-name { color: var(--ink); opacity: 0.85; white-space: nowrap; }
+.db-sys-name {
+  min-width: 0;
+  color: var(--ink);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .db-sys-state {
-  font-size: 9.5px;
+  flex: 0 0 auto;
+  font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
   white-space: nowrap;
 }
-.db-sys.is-broken .db-sys-state { color: #ff8a5c; }
-.db-sys.is-working .db-sys-state { color: var(--accent); animation: db-work-blink 1.1s ease-in-out infinite; }
+.db-sys.is-broken .db-sys-state,
+.db-sys.is-staged .db-sys-state { color: #ff8a5c; }
+.db-sys.is-armed .db-sys-state { color: #ffd27a; animation: db-work-blink 1.1s ease-in-out infinite; }
+.db-sys.is-working .db-sys-state,
+.db-sys.is-running .db-sys-state { color: var(--accent); animation: db-work-blink 1.1s ease-in-out infinite; }
+.db-sys.is-stalled .db-sys-state { color: #ff5a3c; animation: db-work-blink 0.5s ease-in-out infinite; }
 .db-sys.is-sealed .db-sys-state { color: #bfe9ff; }
 .db-sys.is-added .db-sys-state { color: #7cffb0; }
-.db-sys.is-broken .db-sys-name { opacity: 0.6; }
+.db-sys.is-broken .db-sys-name,
+.db-sys.is-staged .db-sys-name { opacity: 0.6; }
 @keyframes db-work-blink { 50% { opacity: 0.45; } }
+
+/* Aggregate job tally (twelve named rows won't fit, so we summarize) */
+.db-jobs {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 0 6px;
+}
+.db-jobs-num { font-size: 18px; font-weight: 700; color: #7cffb0; letter-spacing: 0.04em; }
+.db-jobs-lbl { font-size: 10px; letter-spacing: 0.12em; color: var(--ink); opacity: 0.7; text-transform: uppercase; }
+.db-tally { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 10px; letter-spacing: 0.06em; margin-top: 2px; }
+.db-tally-it { white-space: nowrap; opacity: 0.9; }
+.db-tally-it.is-running { color: var(--accent); }
+.db-tally-it.is-sealed { color: #bfe9ff; }
+.db-tally-it.is-stalled { color: #ff5a3c; font-weight: 700; }
+.db-tally-it.is-cars { color: #ffd27a; }
+
+/* Nitro charges — top row of the systems panel */
+.db-nitro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.16);
+}
+.db-nitro-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: #ffb86b;
+}
+.db-nitro-dots { display: flex; gap: 5px; }
+.db-nitro-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffb86b;
+  box-shadow: 0 0 8px rgba(255, 184, 107, 0.7);
+}
+.db-nitro-dot.is-spent {
+  background: transparent;
+  border: 1px solid rgba(255, 184, 107, 0.35);
+  box-shadow: none;
+}
 
 /* All three memories made it home */
 #l2-win,
@@ -1742,6 +1803,27 @@ body.hit-flash::after {
   gap: 10px 14px;
 }
 
+#fp-shared.is-drone-bay #fp-prompt {
+  bottom: 104px;
+  background: rgba(6, 11, 22, 0.76);
+  border-color: rgba(111, 227, 255, 0.34);
+  color: #e8f4ff;
+  text-shadow: 0 0 12px rgba(111, 227, 255, 0.42);
+}
+
+#fp-shared.is-drone-bay #fp-controls {
+  top: auto;
+  left: 50%;
+  right: auto;
+  bottom: 22px;
+  width: min(960px, calc(100vw - 36px));
+  transform: translateX(-50%);
+  max-width: min(960px, calc(100vw - 36px));
+  background: rgba(6, 11, 22, 0.46);
+  border-color: rgba(111, 227, 255, 0.18);
+  justify-content: center;
+}
+
 .control-item {
   display: inline-flex;
   align-items: center;
@@ -1890,9 +1972,46 @@ body.hit-flash::after {
 
   #db-systems {
     top: 58px;
-    left: 16px;
-    width: min(240px, calc(100vw - 32px));
-    padding: 9px 11px;
+    right: 12px;
+    left: auto;
+    width: min(198px, calc(100vw - 24px));
+    padding: 8px 9px;
+  }
+
+  .db-sys-head,
+  .db-nitro-label {
+    font-size: 8px;
+  }
+
+  .db-sys {
+    gap: 6px;
+    font-size: 8.6px;
+  }
+
+  .db-sys-state {
+    font-size: 7.4px;
+    letter-spacing: 0.1em;
+  }
+
+  .db-nitro-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  #fp-shared.is-drone-bay #fp-prompt {
+    bottom: 118px;
+  }
+
+  #fp-shared.is-drone-bay #fp-controls {
+    bottom: 66px;
+    width: calc(100vw - 36px);
+    padding: 6px 8px;
+    gap: 6px 9px;
+    font-size: 8.2px;
+  }
+
+  #fp-shared.is-drone-bay #fp-controls .control-label {
+    display: none;
   }
 
   #dev-level-badge {
@@ -1908,6 +2027,22 @@ body.hit-flash::after {
     top: 56px;
     font-size: 11.5px;
     padding: 8px 12px;
+  }
+
+  body.drone-bay-up #hud {
+    display: none;
+  }
+
+  body.drone-bay-up #db-systems {
+    top: 58px;
+    right: 12px;
+    width: min(198px, calc(100vw - 168px));
+  }
+
+  body.drone-bay-up #tutorial {
+    top: 196px;
+    width: calc(100vw - 36px);
+    max-width: calc(100vw - 36px);
   }
 
   #l2-request {
