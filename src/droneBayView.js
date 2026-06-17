@@ -14,14 +14,14 @@ import { makeBeamTexture, makeIceBlock } from "./memoryProps.js";
 // The LAUNCH WINDOW (clock) runs the whole time. The real pressure, though, is
 // Diner Dash / Overcooked PATIENCE: every block on the belt is a waiting customer
 // whose ICE is its patience meter. Take too long and the ice melts — that work is
-// LOST and its red dot returns to the dispatch board, costing a whole re-dispatch.
+// LOST and its pip returns to the dispatch board, costing a whole re-dispatch.
 
-// Two pressures: (1) aged dispatch pips on the board heat white -> red and speed the
+// Two pressures: (1) aged dispatch pips on the board heat from pale -> hot and speed the
 // clock if you leave jobs un-dispatched; (2) each block on the belt burns patience
 // and SPOILS if you don't explain + install it before its ice melts.
 const TOTAL_TIME = 195;      // launch window, seconds (tunable)
 const VISIBLE_SLOTS = 5;     // slate positions on the pass; extra finishes back up
-const DOT_DRAIN = 0.045;     // max extra clock drain from each aged red pip at full heat
+const DOT_DRAIN = 0.045;     // max extra clock drain from each aged pip at full heat
 const DOT_START_HEAT = 0.0;  // every dispatch pip starts white and low-pressure
 const DOT_GRACE = 8.0;       // seconds before an undispatched pip begins heating up
 const DOT_HEAT_RATE = 0.035; // undispatched pips heat up after the grace window
@@ -32,11 +32,11 @@ const DOT_SPAWN_BASE = 7.0;  // seconds between new dispatch arrivals
 const DOT_SPAWN_JITTER = 4.0;
 // PATIENCE — Diner Dash / Overcooked style: every block on the belt is a waiting
 // "customer". Its ice IS the patience meter. You must explain it (to learn its bay)
-// and install it before the ice melts; if it melts the work is LOST and its red dot
+// and install it before the ice melts; if it melts the work is LOST and its pip
 // returns to the dispatch board, costing you a whole re-dispatch against the clock.
 const PATIENCE = 18;         // seconds a block survives on the belt before it spoils (tunable)
 const ICE_WARM_AT = 0.5;     // urgency (0 fresh→1 dead) where the ice starts going amber
-const ICE_MELT_AT = 0.78;    // urgency where the ice goes red, pulses, and visibly melts
+const ICE_MELT_AT = 0.78;    // urgency where the ice goes hot, pulses, and visibly melts
 const LOW_TIME = 22;         // clock turns urgent under this
 const CRIT_TIME = 10;        // clock goes CRITICAL under this
 const PANIC_TIME = 30;       // the SKY starts shifting toward panic-red
@@ -47,14 +47,49 @@ const BELT_Y = 3.0;          // slate resting height on the belt
 const ENTRANCE_X = 26;       // where a finished slate slides in from
 const SLATE_ICE_SCALE = 0.52;
 const SLATE_ICE_Y = 2.0;
+const MATCHED_SLATE_SCALE = 0.42;
+const MATCHED_SLATE_POS = new THREE.Vector3(0, -SLATE_ICE_Y * MATCHED_SLATE_SCALE, 0.34);
 
 // Onboarding — short story beats, advanced with Space.
 const BRIEFING_BEATS = [
   "Pilot, you collected the records, but they need repair.",
-  "We don't have a lot of time. Dispatch the drone bay as subagents to get the work done faster.",
-  ["Use ", { command: "entire checkpoint explain" }, " to see what the subagents did."],
-  "The ship needs you to account for every repair before launch.",
+  "Dispatch subagents for help, explain their work, and account for every repair before launch.",
 ];
+const MODE_PROMPTS = {
+  tutorial: {
+    action: "START TUTORIAL",
+    note: "First repair is practice. The clock stays off.",
+  },
+  level: {
+    head: "TUTORIAL COMPLETE",
+    action: "START LEVEL 2",
+    note: "Clock starts now. Finish the remaining repairs.",
+  },
+};
+const PRACTICE_PART_IDX = 0;
+const PRACTICE_FIX_TIME = 1.8;
+const REPAIR_LESSONS = {
+  dispatch: {
+    title: "",
+    parts: ["Click the lit dispatch pip to send one subagent."],
+    cue: "click dispatch",
+  },
+  working: {
+    title: "",
+    parts: ["The subagent is making the repair. Watch the conveyor for the sealed block."],
+    cue: "wait for block",
+  },
+  explain: {
+    title: "",
+    parts: ["Click the sealed ice block to run ", { command: "entire checkpoint explain" }, ", then read the report."],
+    cue: "click block",
+  },
+  match: {
+    title: "",
+    parts: ["Use what you deduced from the report to drag the block to the matching ship square."],
+    cue: "drag to match",
+  },
+};
 
 // Sky panic palette — same dread as Level 1's clock.
 const SKY_CALM  = new THREE.Color(0x2a2350);
@@ -64,14 +99,18 @@ const DOME_CALM = new THREE.Color(0x3a3168);
 const DOME_PANIC = new THREE.Color(0x7a141c);
 const SUN_CALM  = new THREE.Color(0xfff1dc);
 const SUN_PANIC = new THREE.Color(0xff5a3c);
+const GOLD = 0xffde8c;
+const GOLD_TEXT = "#fff3cf";
 
-// A block's ice as its patience runs out: fresh icy-blue → amber → red.
-const ICE_FRESH = new THREE.Color(0xbfe9ff);
+// A block's ice as its patience runs out: fresh lavender glass → amber → rose.
+const ICE_FRESH = new THREE.Color(0xd8ccff);
 const ICE_WARM_C = new THREE.Color(0xffc24a);
-const ICE_HOT_C = new THREE.Color(0xff3b2e);
-const DOT_COOL_C = new THREE.Color(0xf4f8ff);
+const ICE_HOT_C = new THREE.Color(0xe45572);
+const ICE_MATCHED = 0x65f29a;
+const ICE_MATCHED_C = new THREE.Color(ICE_MATCHED);
+const DOT_COOL_C = new THREE.Color(0xf3efff);
 const DOT_WARM_C = new THREE.Color(0xffc24a);
-const DOT_HOT_C = new THREE.Color(0xff3b2e);
+const DOT_HOT_C = new THREE.Color(0xe45572);
 
 // The five HERO systems — rich cards, fixed ids. Exported and FROZEN: Level 3
 // quizzes the player on this exact record (and uses sys.pos on its own island).
@@ -145,6 +184,67 @@ function shuffled(n) {
   const a = [...Array(n).keys()];
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
+}
+
+function slotCellsTouch(a, b) {
+  const ac = a % SLOTS_PER_ROW;
+  const ar = Math.floor(a / SLOTS_PER_ROW);
+  const bc = b % SLOTS_PER_ROW;
+  const br = Math.floor(b / SLOTS_PER_ROW);
+  return Math.abs(ac - bc) <= 1 && Math.abs(ar - br) <= 1;
+}
+
+function hasTouchingDuplicateSlots(bays, cells) {
+  for (let i = 0; i < bays.length; i++) {
+    for (let j = i + 1; j < bays.length; j++) {
+      if (bays[i] === bays[j] && slotCellsTouch(cells[i], cells[j])) return true;
+    }
+  }
+  return false;
+}
+
+function fallbackSeparatedSlotCells(bays) {
+  const groups = new Map();
+  bays.forEach((bay, slotIdx) => groups.set(bay, [...(groups.get(bay) || []), slotIdx]));
+  const entries = [...groups.values()];
+  if (bays.length !== 12 || SLOTS_PER_ROW !== 6 || entries.some((slots) => slots.length !== 2)) return null;
+  const result = Array(bays.length).fill(null);
+  entries.forEach((slots, i) => {
+    result[slots[0]] = i;
+    result[slots[1]] = 6 + ((i + 3) % SLOTS_PER_ROW);
+  });
+  return hasTouchingDuplicateSlots(bays, result) ? null : result;
+}
+
+function separatedSlotCells(bays) {
+  const cells = bays.map((_, i) => i);
+  const order = shuffled(bays.length);
+  const result = Array(bays.length).fill(null);
+  const used = new Set();
+  const bayCells = new Map();
+
+  function search(pos) {
+    if (pos >= order.length) return true;
+    const slotIdx = order[pos];
+    const bay = bays[slotIdx];
+    const assigned = bayCells.get(bay) || [];
+    for (const cell of shuffled(cells.length)) {
+      if (used.has(cell)) continue;
+      if (assigned.some((other) => slotCellsTouch(other, cell))) continue;
+      result[slotIdx] = cell;
+      used.add(cell);
+      bayCells.set(bay, [...assigned, cell]);
+      if (search(pos + 1)) return true;
+      result[slotIdx] = null;
+      used.delete(cell);
+      if (assigned.length) bayCells.set(bay, assigned);
+      else bayCells.delete(bay);
+    }
+    return false;
+  }
+
+  if (search(0)) return result;
+  return fallbackSeparatedSlotCells(bays) || shuffled(bays.length);
 }
 
 function normalizeCmd(s) {
@@ -255,12 +355,12 @@ function buildStarDome() {
   }
   stars.setAttribute("position", new THREE.BufferAttribute(pts, 3));
   const field = new THREE.Points(stars, new THREE.PointsMaterial({
-    color: 0xbfe9ff, size: 0.16, transparent: true, opacity: 0.95,
+    color: 0xd8ccff, size: 0.16, transparent: true, opacity: 0.95,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
   const orbit = new THREE.Mesh(
     new THREE.TorusGeometry(2.0, 0.05, 8, 40),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.7 })
+    new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.7 })
   );
   orbit.position.y = 3.6;
   orbit.rotation.x = Math.PI / 2.4;
@@ -272,13 +372,13 @@ function buildSignalSpire(beamTex) {
   const g = new THREE.Group();
   const spire = new THREE.Mesh(
     new THREE.ConeGeometry(0.5, 7.5, 8),
-    new THREE.MeshStandardMaterial({ color: 0x3a4150, metalness: 0.7, roughness: 0.3, emissive: 0x123a4a, emissiveIntensity: 0.8 })
+    new THREE.MeshStandardMaterial({ color: 0x3a3150, metalness: 0.7, roughness: 0.3, emissive: 0x2e1f5e, emissiveIntensity: 0.8 })
   );
   spire.position.y = 3.75;
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(0.4, 0.4, 70, 10, 1, true),
     new THREE.MeshBasicMaterial({
-      map: beamTex, color: 0x9af0ff, transparent: true, opacity: 0.55,
+      map: beamTex, color: 0xc8b6ff, transparent: true, opacity: 0.55,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
     })
   );
@@ -317,12 +417,12 @@ function buildGravSkid() {
   const g = new THREE.Group();
   const pad = new THREE.Mesh(
     new THREE.CylinderGeometry(1.7, 1.9, 0.5, 12),
-    new THREE.MeshStandardMaterial({ color: 0x2c3140, metalness: 0.6, roughness: 0.35, emissive: 0x123a4a, emissiveIntensity: 0.7 })
+    new THREE.MeshStandardMaterial({ color: 0x2c2840, metalness: 0.6, roughness: 0.35, emissive: 0x2e1f5e, emissiveIntensity: 0.7 })
   );
   pad.position.y = 1.6;
   const glow = new THREE.Mesh(
     new THREE.TorusGeometry(1.5, 0.12, 8, 32),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.65 })
+    new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.65 })
   );
   glow.rotation.x = Math.PI / 2;
   glow.position.y = 0.5;
@@ -387,7 +487,7 @@ function makeBeltTexture() {
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#10151f";
   ctx.fillRect(0, 0, 128, 64);
-  ctx.strokeStyle = "rgba(111,227,255,0.5)";
+  ctx.strokeStyle = "rgba(185,167,255,0.5)";
   ctx.lineWidth = 9;
   for (let x = -64; x < 128; x += 48) {
     ctx.beginPath();
@@ -405,12 +505,12 @@ function buildSlate(upgradeModel) {
   const g = new THREE.Group();
   const slab = new THREE.Mesh(
     new THREE.BoxGeometry(3.3, 0.42, 3.3),
-    new THREE.MeshStandardMaterial({ color: 0x1b2230, metalness: 0.6, roughness: 0.4, emissive: 0x0c2030, emissiveIntensity: 0.5 })
+    new THREE.MeshStandardMaterial({ color: 0x211b32, metalness: 0.6, roughness: 0.4, emissive: 0x25154f, emissiveIntensity: 0.5 })
   );
   slab.position.y = 0.25;
   const rim = new THREE.Mesh(
     new THREE.BoxGeometry(3.6, 0.14, 3.6),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.55 })
+    new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.55 })
   );
   rim.position.y = 0.02;
   g.add(slab, rim);
@@ -436,21 +536,42 @@ function buildSlate(upgradeModel) {
   return g;
 }
 
+function freezeMatchedSlate(slate) {
+  const { ice, upgradeModel, rim } = slate.userData;
+  if (!ice) return;
+  ice.visible = true;
+  ice.scale.setScalar(SLATE_ICE_SCALE);
+  ice.position.y = SLATE_ICE_Y;
+  ice.rotation.set(0, 0, 0);
+  ice.material.color.copy(ICE_MATCHED_C);
+  ice.material.emissive.copy(ICE_MATCHED_C);
+  ice.material.emissiveIntensity = 1.15;
+  ice.material.opacity = 0.74;
+  if (upgradeModel) upgradeModel.visible = false;
+  if (rim) {
+    rim.material.color.setHex(ICE_MATCHED);
+    rim.material.opacity = 0.64;
+  }
+}
+
 // ---------- a subagent: the original Drone Bay drone (octahedron + halo ring) ----------
 // Restored from commit 0553cd7 ("Add Level 2 'The Drone Bay'"): a dark metallic
-// octahedron body wrapped in a spinning cyan torus — a hovering repair probe.
+// octahedron body wrapped in a spinning gold torus — a hovering repair probe.
 function buildDrone() {
   const group = new THREE.Group();
   const craft = new THREE.Group();        // the flying body (bobs locally)
   craft.position.y = 2.6;                  // resting hover height above the pad
 
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x2c3140, metalness: 0.6, roughness: 0.3, emissive: 0x2a8aa6, emissiveIntensity: 1.0,
+    color: 0x2d2842, metalness: 0.6, roughness: 0.3, emissive: 0x735ce0, emissiveIntensity: 1.0,
   });
   const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.9, 0), bodyMat);
   const halo = new THREE.Mesh(
     new THREE.TorusGeometry(1.25, 0.11, 8, 24),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.85 })
+    new THREE.MeshBasicMaterial({
+      color: GOLD, transparent: true, opacity: 0.96,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    })
   );
   halo.rotation.x = Math.PI / 2;
   craft.add(body, halo);
@@ -458,7 +579,7 @@ function buildDrone() {
   // hover underglow
   const glow = new THREE.Mesh(
     new THREE.PlaneGeometry(2.6, 2.6),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false })
   );
   glow.rotation.x = -Math.PI / 2;
   glow.position.y = 0.05;
@@ -475,7 +596,10 @@ function buildDrone() {
   // "available" ground ring — bright when the drone is free to take a job
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(1.7, 0.12, 8, 28),
-    new THREE.MeshBasicMaterial({ color: 0x7cffb0, transparent: true, opacity: 0.7 })
+    new THREE.MeshBasicMaterial({
+      color: GOLD, transparent: true, opacity: 0.92,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    })
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.32;
@@ -498,8 +622,8 @@ function buildDroneRack(homes) {
   const depth = Math.max(7.0, maxZ - minZ + 6.0);
 
   const deckMat = new THREE.MeshStandardMaterial({
-    color: 0x10141d, metalness: 0.55, roughness: 0.68,
-    emissive: 0x08202a, emissiveIntensity: 0.45,
+    color: 0x151126, metalness: 0.55, roughness: 0.68,
+    emissive: 0x25154f, emissiveIntensity: 0.45,
   });
   const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.32, depth), deckMat);
   deck.position.set(centerX, 0.08, centerZ);
@@ -508,8 +632,8 @@ function buildDroneRack(homes) {
   const rearWall = new THREE.Mesh(
     new THREE.BoxGeometry(width + 1.2, 1.3, 0.28),
     new THREE.MeshStandardMaterial({
-      color: 0x121826, metalness: 0.45, roughness: 0.62,
-      emissive: 0x0b1f2a, emissiveIntensity: 0.55,
+      color: 0x18132c, metalness: 0.45, roughness: 0.62,
+      emissive: 0x2a1856, emissiveIntensity: 0.55,
     })
   );
   rearWall.position.set(centerX, 0.82, minZ - 2.65);
@@ -517,12 +641,12 @@ function buildDroneRack(homes) {
 
   const rail = new THREE.Mesh(
     new THREE.BoxGeometry(width + 1.8, 0.16, 0.18),
-    new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.62 })
+    new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.62 })
   );
   rail.position.set(centerX, 1.62, minZ - 2.46);
   group.add(rail);
 
-  const label = makeLabelSprite("SUBAGENT BAY", { px: 30, color: "#7cffb0" });
+  const label = makeLabelSprite("DRONE BAY", { px: 30, color: "#d8ccff" });
   label.position.set(centerX, 4.05, minZ - 2.55);
   group.add(label);
 
@@ -539,7 +663,10 @@ function buildDroneRack(homes) {
 
     const dockRim = new THREE.Mesh(
       new THREE.TorusGeometry(1.85, 0.055, 8, 30),
-      new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.35 })
+      new THREE.MeshBasicMaterial({
+        color: GOLD, transparent: true, opacity: 0.7,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      })
     );
     dockRim.rotation.x = -Math.PI / 2;
     dockRim.position.set(h.x, 0.36, h.z);
@@ -549,14 +676,14 @@ function buildDroneRack(homes) {
       laneXs.add(h.x);
       const lane = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.08, Math.max(2.8, depth - 2.6)),
-        new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.12 })
+        new THREE.MeshBasicMaterial({ color: 0xb9a7ff, transparent: true, opacity: 0.12 })
       );
       lane.position.set(h.x, 0.38, centerZ);
       group.add(lane);
     }
 
     const lampMat = new THREE.MeshStandardMaterial({
-      color: 0x7cffb0, emissive: 0x7cffb0, emissiveIntensity: 1.2,
+      color: 0xd8ccff, emissive: 0xd8ccff, emissiveIntensity: 1.2,
       roughness: 0.35, transparent: true, opacity: 0.95,
     });
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), lampMat);
@@ -595,19 +722,26 @@ const PART_MELT = 1.0;
 const DRAG_DEPTH = 22;           // how far in front of the camera held work floats
 
 // ship-slot layout (two rows of six squares above the belt)
-const SHIP_Y = 9.5, SHIP_Z = -13, SHIP_DX = 6.2;
+const SHIP_Y = 11.6, SHIP_Z = -13, SHIP_DX = 6.2;
 const SLOTS_PER_ROW = 6;     // 12 squares laid out in two rows of six
 const SHIP_ROW_DY = 5.4;     // vertical gap between the two square rows
-// Top-right dispatch panel: pip-only job queue, kept above the belt and out of
-// the ship-slot rows.
+const SHIP_PANEL_H = SHIP_ROW_DY + 7.0;
+// Right-side dispatch bay: pip-only job queue, embedded in the shared control board.
 const DISPATCH_BOARD_COLS = 4;
 const DISPATCH_BOARD_ROWS = 3;
 const DISPATCH_BOARD_X = 27.0;
-const DISPATCH_BOARD_Y = 14.2;
-const DISPATCH_BOARD_Z = -11.6;
-const DISPATCH_DOT_DX = 2.6;
-const DISPATCH_DOT_DY = 1.75;
-const DISPATCH_DOT_SCALE = 0.76;
+const DISPATCH_BOARD_Y = SHIP_Y + SHIP_ROW_DY / 2;
+const DISPATCH_BOARD_Z = SHIP_Z;
+const DISPATCH_DOT_DX = 3.35;
+const DISPATCH_DOT_DY = 2.25;
+const DISPATCH_DOT_SCALE = 0.72;
+const DISPATCH_LABEL_TOP_PAD = 1.32;
+const DISPATCH_CONTENT_DROP = 0.72;
+const SHIP_SLOT_PANEL_W = (SLOTS_PER_ROW - 1) * SHIP_DX + 8.0;
+const DISPATCH_BOARD_W = (DISPATCH_BOARD_COLS - 1) * DISPATCH_DOT_DX + 4.4;
+const CONTROL_BOARD_RIGHT_PAD = 1.1;
+const CONTROL_BOARD_OFFSET_X = -((-SHIP_SLOT_PANEL_W / 2 + DISPATCH_BOARD_X + DISPATCH_BOARD_W / 2 + CONTROL_BOARD_RIGHT_PAD) / 2);
+const boardX = (x) => x + CONTROL_BOARD_OFFSET_X;
 
 // Dedicated subagent garage on the opposite side, separate from the conveyor.
 const DRONE_HOME_X0 = 19.0;
@@ -629,48 +763,48 @@ const SLOT_DATA = [
 // dispatch dots arrive over the run; each returns sealed work for one familiar bay.
 const PART_DATA = [
   { name: "Engine",   icon: "🔧", slotIdx: 0, ckpt: "a1c9e4f72b05", fix: 7.5, broken: "buildBrokenCoils", upgrade: "buildPlasmaRing", became: "Plasma Ring",
-    symptom: "engine seized", sub: "subagent-1", did: "engine was seized solid — rebuilt it as a plasma ring; runs cooler now", session: "2 attempts · salvaged hull plate" },
+    prompt: "Engine would not start.", subagent: "Engine test is stable after replacing seized ignition coils." },
   { name: "Air",      icon: "🫁", slotIdx: 1, ckpt: "62e0a9d4c8f3", fix: 3.5, broken: "buildBrokenVent",  upgrade: "buildGardenPod",  became: "Garden Pod",
-    symptom: "scrubbers failing", sub: "subagent-2", did: "air scrubbers were dead — grew a living garden that breathes for the ship", session: "1 attempt · the vines approved" },
+    prompt: "Air scrubbers stopped cycling.", subagent: "Air mix is stable after growing a living filter." },
   { name: "Battery",  icon: "🔋", slotIdx: 2, ckpt: "c6053a8e2f19", fix: 5.5, broken: "buildBrokenCoils", upgrade: "buildPlasmaRing", became: "Cell Bloom",
-    symptom: "charge collapsing", sub: "subagent-3", did: "battery was fried — regrew it as a bloom of smaller cells; output up 12%", session: "2 attempts" },
+    prompt: "Battery charge kept collapsing.", subagent: "Battery output is stable after rebuilding damaged cells." },
   { name: "Radio",    icon: "📡", slotIdx: 3, ckpt: "f25c8b30d971", fix: 6.5, broken: "buildBrokenDish",  upgrade: "buildSignalSpire", became: "Signal Spire",
-    symptom: "signal gone", sub: "subagent-4", did: "antenna had snapped — respun the mast into a signal spire; full strength", session: "3 attempts · the first two fell over" },
+    prompt: "Radio stopped responding.", subagent: "Radio signal is stable after rebuilding snapped antenna." },
   { name: "Steering", icon: "🧭", slotIdx: 4, ckpt: "3d7b0f9c61ae", fix: 4.5, broken: "buildBrokenNav",   upgrade: "buildStarDome",   became: "Star Dome",
-    symptom: "nav drifting", sub: "subagent-5", did: "the star map was corrupted — replotted 412 stars from scratch", session: "1 attempt" },
+    prompt: "Steering drifted off course.", subagent: "Steering is stable after rebuilding the nav core." },
   { name: "Lights",   icon: "💡", slotIdx: 5, ckpt: "8b47f1e62da0", fix: 2.5, broken: "buildBrokenVent",  upgrade: "buildStarDome",   became: "Aurora Array",
-    symptom: "cabin dark", sub: "subagent-6", did: "the lights were blown — strung an aurora array; brighter than before", session: "1 attempt" },
+    prompt: "Cabin lights went dark.", subagent: "Lights are stable after wiring an aurora array." },
   { name: "Engine",   icon: "🔧", slotIdx: 0, ckpt: "7c1d4a9e3f20", fix: 4.6, broken: "buildBrokenCoils", upgrade: "buildGravSkid", became: "Torque Cradle",
-    symptom: "thrust bucking", sub: "subagent-7", did: "engine mounts were bucking — braced the thrust line with a torque cradle", session: "1 attempt · vibration down" },
+    prompt: "Engine thrust kept bucking.", subagent: "Engine thrust is stable after bracing the torque cradle." },
   { name: "Air",      icon: "🫁", slotIdx: 1, ckpt: "b93f0e7a15cc", fix: 5.0, broken: "buildBrokenVent", upgrade: "buildGardenPod", became: "Mist Lung",
-    symptom: "pressure slipping", sub: "subagent-8", did: "cabin pressure was slipping — seeded a mist lung to keep the air mix stable", session: "2 attempts · seal held" },
+    prompt: "Cabin pressure kept slipping.", subagent: "Air pressure is stable after seeding a mist lung." },
   { name: "Battery",  icon: "🔋", slotIdx: 2, ckpt: "2e6c8b04d7a1", fix: 3.8, broken: "buildBrokenCoils", upgrade: "buildPlasmaRing", became: "Charge Loop",
-    symptom: "cells overheating", sub: "subagent-9", did: "battery cells were overheating — split the load through a charge loop", session: "1 attempt · heat down 18%" },
+    prompt: "Battery cells were overheating.", subagent: "Battery heat is stable after splitting the load through a charge loop." },
   { name: "Radio",    icon: "📡", slotIdx: 3, ckpt: "5a0f3d2c9b88", fix: 4.2, broken: "buildBrokenDish", upgrade: "buildSignalSpire", became: "Relay Needle",
-    symptom: "relay desynced", sub: "subagent-10", did: "radio relay kept desyncing — tuned a relay needle to hold the handshake", session: "2 attempts · no dropouts" },
+    prompt: "Radio relay kept desyncing.", subagent: "Radio handshake is stable after tuning a relay needle." },
   { name: "Steering", icon: "🧭", slotIdx: 4, ckpt: "e4717c5a0d63", fix: 6.0, broken: "buildBrokenNav", upgrade: "buildStarDome", became: "Helm Lens",
-    symptom: "helm lagging", sub: "subagent-11", did: "steering input lagged — rebuilt the helm lens so turns land when you make them", session: "3 attempts · drift removed" },
+    prompt: "Steering inputs were lagging.", subagent: "Steering response is stable after rebuilding the helm lens." },
   { name: "Lights",   icon: "💡", slotIdx: 5, ckpt: "9d28b6f1e470", fix: 3.2, broken: "buildBrokenVent", upgrade: "buildStarDome", became: "Beacon Strip",
-    symptom: "markers blind", sub: "subagent-12", did: "landing markers were blind — wired a beacon strip along the cabin ribs", session: "1 attempt · runway visible" },
+    prompt: "Landing markers went dark.", subagent: "Lights are stable after wiring a beacon strip." },
 ];
 
-const RING = { broken: 0xff3b2e, working: 0xffd27a, target: 0x7cffb0, online: 0x35d97a };
+const RING = { broken: GOLD, working: GOLD, target: GOLD, online: GOLD };
 
-// ---------- a little red dot on the dispatch board (a failure a subagent flies to) ----------
+// ---------- a little waiting pip on the dispatch board (a failure a subagent flies to) ----------
 function buildDispatchDot() {
   const g = new THREE.Group();
   const alarmRing = new THREE.Mesh(
     new THREE.TorusGeometry(0.78, 0.045, 6, 28),
-    new THREE.MeshBasicMaterial({ color: 0xf4f8ff, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xf3efff, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false })
   );
   alarmRing.position.z = 0.02;
   g.add(alarmRing);
-  const coreMat = new THREE.MeshStandardMaterial({ color: 0xf4f8ff, emissive: 0xf4f8ff, emissiveIntensity: 0.9, roughness: 0.35 });
+  const coreMat = new THREE.MeshStandardMaterial({ color: 0xf3efff, emissive: 0xf3efff, emissiveIntensity: 0.9, roughness: 0.35 });
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 14), coreMat);
   g.add(core);
   const halo = new THREE.Mesh(
     new THREE.CircleGeometry(0.62, 20),
-    new THREE.MeshBasicMaterial({ color: 0xf4f8ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xf3efff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })
   );
   halo.position.z = -0.25;
   g.add(halo);
@@ -678,7 +812,7 @@ function buildDispatchDot() {
   for (let i = 0; i < 3; i++) {
     const tick = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.32 + i * 0.06, 0.04),
-      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
     );
     tick.position.set((i - 1) * 0.28, 0.92, 0.08);
     tick.visible = false;
@@ -702,14 +836,28 @@ function buildShipSlot(data) {
   back.position.z = -0.18;
   group.add(back);
   // glowing edge (status)
-  const edgeMat = new THREE.MeshBasicMaterial({ color: RING.broken, transparent: true, opacity: 0.5 });
-  const edge = new THREE.Mesh(new THREE.BoxGeometry(4.42, 3.58, 0.14), edgeMat);
-  edge.position.z = 0.28;
+  const edgeMat = new THREE.MeshBasicMaterial({
+    color: GOLD,
+  });
+  const edge = new THREE.Group();
+  const edgeZ = 0.28;
+  const edgeW = 4.42;
+  const edgeH = 3.58;
+  const edgeT = 0.13;
+  const top = new THREE.Mesh(new THREE.BoxGeometry(edgeW, edgeT, 0.14), edgeMat);
+  const bottom = top.clone();
+  const left = new THREE.Mesh(new THREE.BoxGeometry(edgeT, edgeH, 0.14), edgeMat);
+  const right = left.clone();
+  top.position.set(0, edgeH / 2, edgeZ);
+  bottom.position.set(0, -edgeH / 2, edgeZ);
+  left.position.set(-edgeW / 2, 0, edgeZ);
+  right.position.set(edgeW / 2, 0, edgeZ);
+  edge.add(top, bottom, left, right);
   group.add(edge);
   const label = makeLabelSprite(`${data.icon} ${data.name}`, { px: 38 });
   label.position.y = 2.55;
   group.add(label);
-  const hint = makeLabelSprite("", { px: 34, color: "#ff8a5c" });
+  const hint = makeLabelSprite("", { px: 34, color: "#f09aa8" });
   hint.position.y = -2.35; hint.visible = false;
   group.add(hint);
   const hit = new THREE.Mesh(new THREE.BoxGeometry(4.9, 4.0, 1.4), new THREE.MeshBasicMaterial({ visible: false }));
@@ -717,6 +865,107 @@ function buildShipSlot(data) {
   const holder = new THREE.Group();    // installed slate sits here
   group.add(holder);
   group.userData = { frameMat, edgeMat, label, hint, holder };
+  return group;
+}
+
+function makeTutorialGlowTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 126);
+  g.addColorStop(0, "rgba(255, 243, 207, 0.95)");
+  g.addColorStop(0.22, "rgba(255, 222, 140, 0.72)");
+  g.addColorStop(0.52, "rgba(255, 194, 74, 0.32)");
+  g.addColorStop(1, "rgba(255, 194, 74, 0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function buildTutorialFocusGlow(texture) {
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    color: GOLD,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  glow.renderOrder = 40;
+  glow.visible = false;
+  return glow;
+}
+
+function buildShipGridPanel() {
+  const group = new THREE.Group();
+  const slotPanelW = SHIP_SLOT_PANEL_W;
+  const dispatchW = DISPATCH_BOARD_W;
+  const slotLeft = -slotPanelW / 2;
+  const slotRight = slotPanelW / 2;
+  const panelLeft = slotLeft;
+  const panelRight = DISPATCH_BOARD_X + dispatchW / 2 + CONTROL_BOARD_RIGHT_PAD;
+  const panelW = panelRight - panelLeft;
+  const panelH = SHIP_PANEL_H;
+  const panelCenterX = (panelLeft + panelRight) / 2;
+  const centerY = SHIP_Y + SHIP_ROW_DY / 2;
+  const panelZ = SHIP_Z - 0.52;
+  const toLocalX = (x) => x - panelCenterX;
+
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(panelW, panelH, 0.36),
+    new THREE.MeshStandardMaterial({
+      color: 0x090712,
+      emissive: 0x130f28,
+      emissiveIntensity: 0.18,
+      metalness: 0.52,
+      roughness: 0.72,
+      transparent: true,
+      opacity: 0.92,
+    })
+  );
+  group.add(base);
+
+  const borderMat = new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.42 });
+  const gridMat = new THREE.MeshBasicMaterial({ color: 0xd8ccff, transparent: true, opacity: 0.11 });
+  const z = 0.22;
+
+  const addBar = (x, y, w, h, mat = borderMat) => {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.08), mat);
+    bar.position.set(x, y, z);
+    group.add(bar);
+    return bar;
+  };
+  const addWorldBar = (x, y, w, h, mat = borderMat) => addBar(toLocalX(x), y, w, h, mat);
+  const addWorldSpan = (x0, x1, y, h, mat = borderMat) => addBar(toLocalX((x0 + x1) / 2), y, x1 - x0, h, mat);
+
+  addBar(0, panelH / 2 - 0.12, panelW, 0.16);
+  addBar(0, -panelH / 2 + 0.12, panelW, 0.16);
+  addBar(-panelW / 2 + 0.12, 0, 0.16, panelH);
+  addBar(panelW / 2 - 0.12, 0, 0.16, panelH);
+
+  for (let col = 1; col < SLOTS_PER_ROW; col++) {
+    const x = (col - SLOTS_PER_ROW / 2) * SHIP_DX;
+    addWorldBar(x, 0, 0.08, panelH - 1.25, gridMat);
+  }
+  addWorldSpan(slotLeft + 0.55, slotRight + 0.55, 0, 0.08, gridMat);
+
+  const dispatchDividerX = slotRight + 0.55;
+  addWorldBar(dispatchDividerX, 0, 0.12, panelH - 0.7, borderMat);
+
+  const boltMat = new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.5 });
+  for (const sx of [-1, 1]) {
+    for (const sy of [-1, 1]) {
+      const bolt = new THREE.Mesh(new THREE.CircleGeometry(0.16, 14), boltMat);
+      bolt.position.set(sx * (panelW / 2 - 0.72), sy * (panelH / 2 - 0.72), z + 0.02);
+      group.add(bolt);
+    }
+  }
+
+  group.position.set(boardX(panelCenterX), centerY, panelZ);
   return group;
 }
 
@@ -749,9 +998,9 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
 
   // ---------- conveyor belt ----------
   const beltTex = makeBeltTexture();
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(54, 0.9, 6.4), new THREE.MeshStandardMaterial({ map: beltTex, color: 0x8fb6d6, metalness: 0.3, roughness: 0.6, emissive: 0x16384a, emissiveIntensity: 0.5 }));
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(54, 0.9, 6.4), new THREE.MeshStandardMaterial({ map: beltTex, color: 0x9180c8, metalness: 0.3, roughness: 0.6, emissive: 0x2a1f55, emissiveIntensity: 0.5 }));
   belt.position.set(0, BELT_Y - 1.0, 2); scene.add(belt);
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(54, 0.2, 0.4), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.5 }));
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(54, 0.2, 0.4), new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.72 }));
   lip.position.set(0, BELT_Y - 0.5, 5.2); scene.add(lip);
 
   // ---------- twelve labeled ship squares (two per bay), in two rows of six ----------
@@ -760,12 +1009,15 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   const cellPos = (cell) => {
     const col = cell % SLOTS_PER_ROW;
     const row = Math.floor(cell / SLOTS_PER_ROW);
-    return new THREE.Vector3((col - (SLOTS_PER_ROW - 1) / 2) * SHIP_DX, SHIP_Y + row * SHIP_ROW_DY, SHIP_Z);
+    return new THREE.Vector3(boardX((col - (SLOTS_PER_ROW - 1) / 2) * SHIP_DX), SHIP_Y + row * SHIP_ROW_DY, SHIP_Z);
   };
   // two squares per bay, in bay order: [0,0,1,1,2,2,3,3,4,4,5,5]
   const slotBays = [];
   SLOT_DATA.forEach((_, b) => { for (let k = 0; k < PART_DATA.filter((p) => p.slotIdx === b).length; k++) slotBays.push(b); });
-  let slotCells = shuffled(slotBays.length);   // square i occupies grid cell slotCells[i]
+  let slotCells = separatedSlotCells(slotBays); // square i occupies grid cell slotCells[i]
+
+  const shipGridPanel = buildShipGridPanel();
+  scene.add(shipGridPanel);
 
   const slots = slotBays.map((bayIdx, i) => {
     const data = SLOT_DATA[bayIdx];
@@ -780,27 +1032,16 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   // ---- the dispatch BOARD: twelve job sockets, arriving over time ----
   // Dots are GENERIC job markers: a white dot means "new work waiting"; if it
   // sits, it warms toward red. The dot never tells you which bay the work belongs to.
-  const boardW = (DISPATCH_BOARD_COLS - 1) * DISPATCH_DOT_DX + 4.4;
-  const boardH = (DISPATCH_BOARD_ROWS - 1) * DISPATCH_DOT_DY + 4.2;
-  const dispatchBoard = new THREE.Mesh(
-    new THREE.BoxGeometry(boardW, boardH, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x10141d, emissive: 0x16080a, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.6 })
-  );
-  dispatchBoard.position.set(DISPATCH_BOARD_X, DISPATCH_BOARD_Y, DISPATCH_BOARD_Z); scene.add(dispatchBoard);
-  const boardEdge = new THREE.Mesh(
-    new THREE.BoxGeometry(boardW + 0.4, boardH + 0.4, 0.3),
-    new THREE.MeshBasicMaterial({ color: 0xff5a3c, transparent: true, opacity: 0.32 })
-  );
-  boardEdge.position.set(DISPATCH_BOARD_X, DISPATCH_BOARD_Y, DISPATCH_BOARD_Z - 0.16); scene.add(boardEdge);
-  const dispatchLabel = makeLabelSprite("DISPATCH", { px: 28, color: "#ff8a5c" });
-  dispatchLabel.position.set(DISPATCH_BOARD_X, DISPATCH_BOARD_Y + boardH / 2 - 0.55, DISPATCH_BOARD_Z + 0.3); scene.add(dispatchLabel);
-  const dotXForCol = (col) => DISPATCH_BOARD_X + (col - (DISPATCH_BOARD_COLS - 1) / 2) * DISPATCH_DOT_DX;
+  const boardH = SHIP_PANEL_H;
+  const dispatchLabel = makeLabelSprite("DISPATCH", { px: 28, color: GOLD_TEXT });
+  dispatchLabel.position.set(boardX(DISPATCH_BOARD_X), DISPATCH_BOARD_Y + boardH / 2 - DISPATCH_LABEL_TOP_PAD, DISPATCH_BOARD_Z + 0.3); scene.add(dispatchLabel);
+  const dotXForCol = (col) => boardX(DISPATCH_BOARD_X + (col - (DISPATCH_BOARD_COLS - 1) / 2) * DISPATCH_DOT_DX);
   const dotPosFor = (i) => {
     const col = i % DISPATCH_BOARD_COLS;
     const row = Math.floor(i / DISPATCH_BOARD_COLS);
     return new THREE.Vector3(
       dotXForCol(col),
-      DISPATCH_BOARD_Y + ((DISPATCH_BOARD_ROWS - 1) / 2 - row) * DISPATCH_DOT_DY - 0.35,
+      DISPATCH_BOARD_Y + ((DISPATCH_BOARD_ROWS - 1) / 2 - row) * DISPATCH_DOT_DY - 0.35 - DISPATCH_CONTENT_DROP,
       DISPATCH_BOARD_Z + 0.32
     );
   };
@@ -808,7 +1049,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   // the little pips — future sockets stay dark; active jobs arrive white
   const jobDots = [];
   for (let i = 0; i < TOTAL_JOBS; i++) {
-    const socket = new THREE.Mesh(new THREE.CircleGeometry(0.5, 18), new THREE.MeshBasicMaterial({ color: 0x2a1014 }));
+    const socket = new THREE.Mesh(new THREE.CircleGeometry(0.5, 18), new THREE.MeshBasicMaterial({ color: 0x07050a }));
     socket.position.copy(dotPosFor(i).clone().setZ(DISPATCH_BOARD_Z + 0.28)); scene.add(socket);
     const pos = dotPosFor(i);
     const group = buildDispatchDot();
@@ -817,6 +1058,12 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     scene.add(group);
     jobDots.push({ idx: i, group, pos, taken: false, spawned: false, partIdx: null, heat: DOT_START_HEAT, wait: 0 });
   }
+  const tutorialGlowTexture = makeTutorialGlowTexture();
+  const tutorialFocusGlows = Array.from({ length: 1 }, () => {
+    const glow = buildTutorialFocusGlow(tutorialGlowTexture);
+    scene.add(glow);
+    return glow;
+  });
   let pendingQueue = shuffled(TOTAL_JOBS);   // order hidden jobs arrive on the dispatch board
   let jobsSpawned = 0, spawnTimer = 0;
 
@@ -856,15 +1103,16 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     drones.push({ mesh, home, busy: false, part: null, phase: "home", flyProg: 0, weldAt: null });
   }
   const freeDrone = () => drones.find((d) => !d.busy);
-  // where a drone hovers to weld a dot: just in front of (and level with) it
-  const weldPose = (at) => at.clone().add(new THREE.Vector3(0, -2.0, 2.6));
+  // Drones still work on the dispatch board, but slightly below each pip and at
+  // a smaller scale so neighboring job lights stay readable.
+  const weldPose = (at) => at.clone().add(new THREE.Vector3(0, -0.95, 1.15));
 
   // jobs riding the belt (arrival order), by part index
   const belted = [];
 
   // ---------- sparks ----------
   const sparks = [];
-  function spawnSpark(pos, color = 0x9af0ff, n = 14) {
+  function spawnSpark(pos, color = 0xc8b6ff, n = 14) {
     const arr = new Float32Array(n * 3); const vel = [];
     for (let i = 0; i < n; i++) { arr[i * 3] = pos.x; arr[i * 3 + 1] = pos.y; arr[i * 3 + 2] = pos.z; vel.push(new THREE.Vector3((Math.random() - 0.5) * 9, Math.random() * 7, (Math.random() - 0.5) * 9)); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(arr, 3));
@@ -876,22 +1124,33 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   function nextSpawnDelay() {
     return DOT_SPAWN_BASE + Math.random() * DOT_SPAWN_JITTER;
   }
-  function spawnNextDot() {
-    if (!pendingQueue.length) return false;
-    const dot = jobDots.find((j) => !j.spawned);
+  function activateDot(dot, partIdx) {
     if (!dot) return false;
-    const partIdx = pendingQueue.shift();
     const p = parts[partIdx];
+    if (!p || p.state !== "queued") return false;
     dot.spawned = true; dot.taken = false; dot.partIdx = partIdx;
     dot.heat = DOT_START_HEAT; dot.wait = 0; dot.group.visible = true;
     p.state = "broken"; p.dotIdx = dot.idx;
     jobsSpawned += 1;
-    spawnSpark(dot.pos.clone(), 0xf4f8ff, 10);
+    spawnSpark(dot.pos.clone(), 0xf3efff, 10);
     return true;
+  }
+  function spawnNextDot() {
+    const dot = jobDots.find((j) => !j.spawned);
+    if (!dot) return false;
+    while (pendingQueue.length) {
+      const partIdx = pendingQueue.shift();
+      if (activateDot(dot, partIdx)) return true;
+    }
+    return false;
   }
   function spawnInitialDots() {
     for (let i = 0; i < INITIAL_DOTS; i++) spawnNextDot();
     spawnTimer = nextSpawnDelay();
+  }
+  function spawnPracticeDot() {
+    pendingQueue = pendingQueue.filter((idx) => idx !== PRACTICE_PART_IDX);
+    return activateDot(jobDots.find((j) => !j.spawned), PRACTICE_PART_IDX);
   }
 
   // ---------- HUD ----------
@@ -912,16 +1171,30 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   const briefingEl = document.getElementById("db-briefing");
   const briefingTextEl = document.getElementById("db-briefing-text");
   const briefingNextEl = document.getElementById("db-briefing-next");
+  const modePrompt = document.getElementById("db-mode-prompt");
+  const modeHead = document.getElementById("db-mode-head");
+  const modeAction = document.getElementById("db-mode-action");
+  const modeNote = document.getElementById("db-mode-note");
+  const missionLesson = document.getElementById("db-mission-lesson");
+  const missionLessonKicker = document.getElementById("db-mission-lesson-kicker");
+  const missionLessonTitle = document.getElementById("db-mission-lesson-title");
+  const missionLessonText = document.getElementById("db-mission-lesson-text");
+  const missionLessonCue = document.getElementById("db-mission-lesson-cue");
   const countdownEl = document.getElementById("db-countdown");
   const countdownTime = document.getElementById("db-countdown-time");
   const systemsEl = document.getElementById("db-systems-rows");
   const winEl = document.getElementById("db-win");
-  const winSub = document.getElementById("db-win-sub");
+  const winJobs = document.getElementById("db-win-jobs");
+  const winFixes = document.getElementById("db-win-fixes");
+  const winNext = document.getElementById("db-win-next");
   const failEl = document.getElementById("db-fail");
+  const failTitle = document.getElementById("db-lf-title");
+  const failSub = document.getElementById("db-lf-sub");
 
   let active = false, started = false, failed = false, reportSent = false;
+  let practiceMode = false, practiceComplete = false;
   let promptText = null;
-  let msgTimer = null, winTimer = null, briefingIndex = 0;
+  let msgTimer = null, winTimer = null, briefingIndex = 0, modePromptState = null, lessonKey = null;
   let timeLeft = TOTAL_TIME, timerRunning = false, elapsed = 0;
   let panelMode = null, reviewPart = null, buffer = "";
   let boardRenderT = 0;
@@ -974,16 +1247,55 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     setNdc(e); raycaster.setFromCamera(ndc, camera);
     return raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(DRAG_DEPTH));
   }
+  function hideTutorialFocus() {
+    tutorialFocusGlows.forEach((glow) => { glow.visible = false; });
+  }
+  function tutorialFocusTargets() {
+    if (!practiceMode || !lessonKey || panelMode === "review") return [];
+    const p = parts[PRACTICE_PART_IDX];
+    if (!p) return [];
+    if (lessonKey === "dispatch") {
+      const dot = jobDots.find((j) => j.partIdx === p.idx && j.spawned && !j.taken);
+      if (!dot) return [];
+      const pos = dot.group.getWorldPosition(new THREE.Vector3());
+      pos.z += 0.18;
+      return [{ pos, sx: 2.2, sy: 2.2 }];
+    }
+    if (lessonKey === "explain" && p.slateMesh) {
+      const pos = (p.slateMesh.userData.ice || p.slateMesh).getWorldPosition(new THREE.Vector3());
+      pos.z += 0.1;
+      return [{ pos, sx: 4.4, sy: 3.6 }];
+    }
+    if (lessonKey === "match") {
+      const sl = slots.find((slot) => slot.bayIdx === p.targetSlot && slotHasRoom(slot.idx));
+      if (!sl) return [];
+      const pos = sl.slot.getWorldPosition(new THREE.Vector3());
+      pos.z += 0.16;
+      return [{ pos, sx: 6.2, sy: 5.2 }];
+    }
+    return [];
+  }
+  function updateTutorialFocus(t) {
+    const targets = tutorialFocusTargets();
+    for (let i = 0; i < tutorialFocusGlows.length; i++) {
+      const glow = tutorialFocusGlows[i];
+      const target = targets[i];
+      if (!target) { glow.visible = false; continue; }
+      const wave = 0.5 + 0.5 * Math.sin(t * 4.6 + i * 0.8);
+      const pulse = 1 + wave * 0.12;
+      glow.visible = true;
+      glow.position.copy(target.pos);
+      glow.scale.set(target.sx * pulse, target.sy * pulse, 1);
+      glow.material.opacity = 0.42 + wave * 0.28;
+    }
+  }
 
   // ---------- HUD helpers ----------
   function setPrompt(t) { if (!promptEl || t === promptText) return; promptText = t; if (t) { promptEl.textContent = t; promptEl.classList.remove("hidden"); } else promptEl.classList.add("hidden"); }
   function setControls() {
     if (!controlsEl) return;
-    controlsEl.innerHTML = `
-      <span class="control-item"><span class="control-label">Dispatch / review</span><span class="key key-wide">click</span></span>
-      <span class="control-item"><span class="control-label">Install</span><span class="key key-wide">drag to slot</span></span>
-      <span class="control-item"><span class="control-label">Back to orbit</span><span class="key">B</span></span>`;
-    controlsEl.classList.remove("hidden");
+    controlsEl.innerHTML = "";
+    controlsEl.classList.add("hidden");
   }
   function hideControls() { controlsEl?.classList.add("hidden"); }
   // The dispatch board is now physical (3D pips on the hull rail). The old
@@ -1004,6 +1316,165 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
         (beltCount() - unreviewedCount() ? `<span class="db-tally-it is-cars">ready ${beltCount() - unreviewedCount()}</span>` : ``) +
       `</div>`;
     renderBoard();
+  }
+  function renderRepairLesson(key) {
+    const lesson = REPAIR_LESSONS[key];
+    if (!lesson || !missionLesson) return;
+    lessonKey = key;
+    if (missionLessonKicker) missionLessonKicker.textContent = "DRONE BAY";
+    if (missionLessonTitle) {
+      missionLessonTitle.textContent = lesson.title || "";
+      missionLessonTitle.classList.toggle("hidden", !lesson.title);
+    }
+    if (missionLessonText) {
+      missionLessonText.replaceChildren(...lesson.parts.map((part) => {
+        if (typeof part === "string") return document.createTextNode(part);
+        const command = document.createElement("span");
+        command.className = "mission-lesson-command";
+        command.textContent = part.command;
+        return command;
+      }));
+      missionLessonText.classList.remove("beat-in");
+      void missionLessonText.offsetWidth;
+      missionLessonText.classList.add("beat-in");
+    }
+    if (missionLessonCue) {
+      missionLessonCue.innerHTML = `<span class="mission-lesson-next">${lesson.cue || ""}</span>`;
+    }
+    missionLesson.classList.remove("hidden");
+  }
+  function hideRepairLesson() {
+    lessonKey = null;
+    missionLesson?.classList.add("hidden");
+    hideTutorialFocus();
+  }
+  function showModePrompt(kind) {
+    const prompt = MODE_PROMPTS[kind];
+    if (!prompt || !modePrompt) return;
+    modePromptState = kind;
+    timerRunning = false;
+    hideRepairLesson();
+    closePanel();
+    briefingEl?.classList.add("hidden");
+    if (modeHead) {
+      modeHead.textContent = prompt.head || "";
+      modeHead.classList.toggle("hidden", !prompt.head);
+    }
+    if (modeAction) modeAction.textContent = prompt.action;
+    if (modeNote) modeNote.textContent = prompt.note;
+    modePrompt.dataset.mode = kind;
+    modePrompt.classList.remove("hidden");
+  }
+  function visibleModePromptKind() {
+    if (!modePrompt || modePrompt.classList.contains("hidden")) return null;
+    return modePrompt.dataset.mode || modePromptState;
+  }
+  function hideModePrompt() {
+    if (modePrompt) {
+      modePrompt.classList.add("hidden");
+      delete modePrompt.dataset.mode;
+    }
+    modePromptState = null;
+    modeAction?.blur();
+  }
+  function escapeHtml(v) {
+    return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function escapeRegExp(v) {
+    return String(v ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function renderReportText(text, systemName, allowHighlight = true) {
+    const source = String(text ?? "");
+    const key = String(systemName ?? "").trim();
+    if (!allowHighlight || !key) return { html: escapeHtml(source), matched: false };
+    const match = new RegExp(`\\b${escapeRegExp(key)}\\b`, "i").exec(source);
+    if (!match) return { html: escapeHtml(source), matched: false };
+    const before = source.slice(0, match.index);
+    const word = source.slice(match.index, match.index + match[0].length);
+    const after = source.slice(match.index + match[0].length);
+    return {
+      html: `${escapeHtml(before)}<span class="term-report-keyword">${escapeHtml(word)}</span>${escapeHtml(after)}`,
+      matched: true,
+    };
+  }
+  function resetWorkState() {
+    closePanel();
+    belted.length = 0;
+    picked = null; dragging = false;
+    slotCells = separatedSlotCells(slotBays);
+    pendingQueue = shuffled(TOTAL_JOBS);
+    jobsSpawned = 0; spawnTimer = 0;
+    slots.forEach((sl, i) => {
+      sl.slotPos.copy(cellPos(slotCells[i]));
+      sl.slot.position.copy(sl.slotPos);
+    });
+    parts.forEach((p) => {
+      if (p.slateMesh) {
+        p.slateMesh.parent?.remove(p.slateMesh);
+        scene.remove(p.slateMesh);
+        p.slateMesh = null;
+      }
+      p.state = "queued"; p.placedIn = null; p.explained = false; p.fixT = 0; p.installT = 0;
+      p.beltX = ENTRANCE_X; p.patience = 0; p.dotIdx = null;
+    });
+    for (const j of jobDots) {
+      j.spawned = false; j.taken = false; j.partIdx = null; j.heat = DOT_START_HEAT; j.wait = 0;
+      j.group.visible = false;
+    }
+    for (const d of drones) {
+      d.busy = false; d.part = null; d.phase = "home"; d.flyProg = 0; d.weldAt = null;
+      d.mesh.position.copy(d.home);
+    }
+  }
+  function restorePracticePart() {
+    const p = parts[PRACTICE_PART_IDX];
+    if (!p || p.state !== "queued") return;
+    const sl = slots.find((slot) => slot.bayIdx === p.targetSlot && slotHasRoom(slot.idx));
+    if (!sl) return;
+    pendingQueue = pendingQueue.filter((idx) => idx !== p.idx);
+    p.state = "placed"; p.placedIn = sl.idx; p.explained = true; p.patience = PATIENCE;
+    const slate = buildSlate(BUILD[p.data.upgrade]());
+    slate.userData.partIdx = p.idx;
+    p.slateMesh = slate;
+    freezeMatchedSlate(slate);
+    sl.slot.userData.holder.add(slate);
+    slate.position.copy(MATCHED_SLATE_POS);
+    slate.scale.setScalar(MATCHED_SLATE_SCALE);
+    jobsSpawned = Math.max(jobsSpawned, 1);
+  }
+  function startPractice() {
+    hideModePrompt();
+    resetWorkState();
+    failed = false; reportSent = false; started = true; practiceMode = true; practiceComplete = false;
+    timeLeft = TOTAL_TIME; timerRunning = false; elapsed = 0; boardRenderT = 0;
+    failEl?.classList.add("hidden"); winEl?.classList.add("hidden");
+    spawnPracticeDot();
+    renderRepairLesson("dispatch");
+    updateClock(); updateSystems();
+  }
+  function startTimedRun() {
+    hideModePrompt();
+    hideRepairLesson();
+    closePanel();
+    hideTutorialFocus();
+    failed = false; reportSent = false; started = true; practiceMode = false;
+    timeLeft = TOTAL_TIME; timerRunning = true; elapsed = 0; boardRenderT = 0;
+    failEl?.classList.add("hidden"); winEl?.classList.add("hidden");
+    spawnInitialDots();
+    updateClock(); updateSystems();
+  }
+  function finishPractice() {
+    if (!practiceMode) return;
+    practiceMode = false;
+    practiceComplete = true;
+    hideRepairLesson();
+    showModePrompt("level");
+    updateSystems(); updateClock();
+  }
+  function acceptModePrompt() {
+    const acceptedMode = visibleModePromptKind();
+    if (acceptedMode === "tutorial") startPractice();
+    else if (acceptedMode === "level") startTimedRun();
   }
 
   // ---------- clock + panic ----------
@@ -1036,15 +1507,29 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     briefingTextEl.classList.add("beat-in");
     if (briefingNextEl) briefingNextEl.textContent = briefingIndex < BRIEFING_BEATS.length - 1 ? "to continue" : "to begin";
   }
-  function advanceBriefing() { if (started) return; if (briefingIndex < BRIEFING_BEATS.length - 1) { briefingIndex += 1; renderBriefingBeat(); return; } startLevel(); }
-  function showBriefing() { timerRunning = false; boardEl?.classList.add("hidden"); tutorialEl?.classList.add("hidden"); briefingIndex = 0; renderBriefingBeat(); briefingEl?.classList.remove("hidden"); }
-  function startLevel() {
-    if (started) return; started = true; briefingEl?.classList.add("hidden");
-    timeLeft = TOTAL_TIME; timerRunning = true; elapsed = 0; boardRenderT = 0;
-    spawnInitialDots();
-    updateClock(); updateSystems();
+  function advanceBriefing() {
+    if (started) return;
+    if (briefingIndex < BRIEFING_BEATS.length - 1) {
+      briefingIndex += 1;
+      renderBriefingBeat();
+      return;
+    }
+    showModePrompt("tutorial");
+  }
+  function showBriefing() {
+    timerRunning = false;
+    boardEl?.classList.add("hidden");
+    tutorialEl?.classList.add("hidden");
+    hideModePrompt();
+    hideRepairLesson();
+    briefingIndex = 0;
+    renderBriefingBeat();
+    briefingEl?.classList.remove("hidden");
   }
   briefingEl?.addEventListener("click", () => { if (active && !started) advanceBriefing(); });
+  modeAction?.addEventListener("click", acceptModePrompt);
+  termCta?.addEventListener("click", () => { if (active && panelMode === "review") continueReview(); });
+  winNext?.addEventListener("click", () => { if (active && reportSent) onNext?.(); });
 
   // ---------- lifecycle: dispatch → fix → belt → explain → install ----------
   // Click a generic active pip → a subagent flies to that waiting job. The pip
@@ -1056,7 +1541,8 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     jd.taken = true; jd.group.visible = false;
     p.state = "working";
     d.busy = true; d.part = p; d.phase = "out"; d.flyProg = 0; d.weldAt = jd.pos.clone();
-    spawnSpark(jd.pos.clone(), 0x6fe3ff, 12);
+    spawnSpark(jd.pos.clone(), 0xc8b6ff, 12);
+    if (practiceMode && p.idx === PRACTICE_PART_IDX) renderRepairLesson("working");
     updateSystems();
   }
   function partToBelt(p) {                 // subagent finished → slate rides the belt
@@ -1068,13 +1554,14 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     scene.add(slate);
     p.slateMesh = slate;
     belted.push(p.idx);
+    if (practiceMode && p.idx === PRACTICE_PART_IDX) renderRepairLesson("explain");
     updateSystems();
   }
   // patience ran out — the work SPOILS and is lost: the block leaves the belt and its
-  // red dot returns to the dispatch board, so the whole job has to be re-dispatched.
+  // pip returns to the dispatch board, so the whole job has to be re-dispatched.
   function spoilPart(p) {
     const i = belted.indexOf(p.idx); if (i >= 0) belted.splice(i, 1);
-    spawnSpark(new THREE.Vector3(p.beltX, BELT_Y, 2), 0xff3b2e, 20);
+    spawnSpark(new THREE.Vector3(p.beltX, BELT_Y, 2), 0xe45572, 20);
     if (p.slateMesh) { scene.remove(p.slateMesh); p.slateMesh = null; }
     if (reviewPart === p) closePanel();
     p.state = "broken"; p.explained = false; p.placedIn = null; p.patience = 0; p.beltX = ENTRANCE_X;
@@ -1089,24 +1576,76 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
 
   // ---------- review (explain) ----------
   function flashTerminal(t, ok) { if (!termMsg) return; clearTimeout(msgTimer); termMsg.textContent = t; termMsg.classList.remove("show-ok", "show-err"); termMsg.classList.add(ok ? "show-ok" : "show-err"); msgTimer = setTimeout(() => termMsg.classList.remove("show-ok", "show-err"), 3600); }
+  function renderReviewContinueCta() {
+    if (!termCta) return;
+    termCta.innerHTML =
+      `<button type="button" class="term-continue-btn">` +
+        `<span class="term-continue-key">Space</span>` +
+        `<span class="term-continue-text">to continue</span>` +
+      `</button>`;
+  }
+  function dispatchReportLines() {
+    const count = parts.length;
+    return [
+      "Beep, boop. Marvin here.",
+      "Against several reasonable projections, the pilot understood the paperwork.",
+      `${count} repair jobs dispatched.`,
+      `${count} subagent fixes explained, matched, and accounted for.`,
+    ];
+  }
+  function renderDispatchReportList() {
+    if (!termList) return;
+    termList.innerHTML = dispatchReportLines()
+      .map((line, i) => `<div class="term-list-row term-dispatch-report-line${i === 0 ? " is-marvin" : ""}"><span class="tl-title">${line}</span></div>`)
+      .join("");
+    termList.classList.remove("hidden");
+  }
+  function renderWinReport() {
+    const lines = dispatchReportLines();
+    if (winJobs) winJobs.textContent = lines[2];
+    if (winFixes) winFixes.textContent = lines[3];
+  }
+  function continueReview() {
+    if (panelMode !== "review") return;
+    const returnToPracticeMatch = practiceMode && reviewPart?.idx === PRACTICE_PART_IDX;
+    closePanel();
+    if (returnToPracticeMatch) renderRepairLesson("match");
+  }
   function renderPanel() {
     if (panelMode === "review" && reviewPart) {
       const d = reviewPart.data;
-      termHint.textContent = "# what did the subagent do? now match it to the ship";
+      termHint.textContent = "";
       termInput.textContent = `entire checkpoint explain ${d.ckpt}`; termInput.classList.add("is-dim");
       if (termList) {
+        const practiceReview = practiceMode && reviewPart.idx === PRACTICE_PART_IDX;
+        const prompt = renderReportText(d.prompt, d.name, practiceReview);
+        const subagent = renderReportText(d.subagent, d.name, practiceReview && !prompt.matched);
         termList.innerHTML =
-          `<div class="term-list-row"><span class="tl-key tl-exp-key">checkpoint</span><span class="tl-title">${d.ckpt}</span></div>` +
-          [["subagent", d.sub], ["did", d.did], ["became", d.became], ["session", d.session]].map(([k, v]) =>
-            `<div class="term-list-row"><span class="tl-key tl-exp-key">${k}</span><span class="tl-title">${v}</span></div>`).join("");
+          `<div class="term-list-row term-report-row"><span class="tl-key tl-exp-key">Prompt:</span><span class="tl-title">${prompt.html}</span></div>` +
+          `<div class="term-list-row term-report-row"><span class="tl-key tl-exp-key">Subagent:</span><span class="tl-title">${subagent.html}</span></div>`;
         termList.classList.remove("hidden");
       }
-      if (termCta) termCta.innerHTML = `<span class="cta-label">DRAG</span><span class="cta-note">it to its matching ship square</span>`;
+      if (termMsg) {
+        termMsg.textContent = "";
+        termMsg.classList.remove("show-ok", "show-err");
+      }
+      if (practiceMode && reviewPart.idx === PRACTICE_PART_IDX) renderReviewContinueCta();
+      else if (termCta) termCta.innerHTML = "";
       termEl?.classList.remove("hidden");
     } else if (panelMode === "report") {
-      termHint.textContent = reportSent ? "# dispatch sent — the day is on the record" : "# all blocks placed — dispatch to lock in the matches";
-      termInput.textContent = buffer; termInput.classList.remove("is-dim"); termList?.classList.add("hidden");
-      if (termCta) termCta.innerHTML = reportSent ? "" : `<span class="cta-label">TYPE</span><span class="cta-cmd">entire dispatch</span>`;
+      if (reportSent) {
+        termHint.textContent = "";
+        termInput.textContent = "entire dispatch";
+        termInput.classList.add("is-dim");
+        renderDispatchReportList();
+        if (termCta) termCta.innerHTML = "";
+      } else {
+        termHint.textContent = "# all blocks placed — dispatch to lock in the matches";
+        termInput.textContent = buffer;
+        termInput.classList.remove("is-dim");
+        termList?.classList.add("hidden");
+        if (termCta) termCta.innerHTML = `<span class="cta-label">TYPE</span><span class="cta-cmd">entire dispatch</span>`;
+      }
       termEl?.classList.remove("hidden");
     }
   }
@@ -1117,13 +1656,13 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       // The block STAYS sealed — explain only opens the report. You read what the
       // subagent did and DEDUCE which bay it belongs to; the block never says.
       p.explained = true; p.state = "review";
-      spawnSpark(p.slateMesh.position.clone().setY(BELT_Y + 2), 0x8fe3ff, 12);
-      flashTerminal(`explained ${p.data.ckpt} — read what it did, then drag it to the bay you reckon it fixes`, true);
+      spawnSpark(p.slateMesh.position.clone().setY(BELT_Y + 2), 0xc8b6ff, 12);
       updateSystems();
     }
     renderPanel();
+    if (practiceMode && p.idx === PRACTICE_PART_IDX) hideRepairLesson();
   }
-  function closePanel() { panelMode = null; reviewPart = null; buffer = ""; termEl?.classList.add("hidden"); termList?.classList.add("hidden"); termMsg?.classList.remove("show-ok", "show-err"); }
+  function closePanel() { panelMode = null; reviewPart = null; buffer = ""; termEl?.classList.add("hidden"); termList?.classList.add("hidden"); if (termCta) termCta.innerHTML = ""; if (termMsg) termMsg.textContent = ""; termMsg?.classList.remove("show-ok", "show-err"); }
 
   // drop a block into a square — graded RIGHT HERE. A wrong bay bounces the block
   // straight back to the belt and says so, so the match is a real read-the-label
@@ -1132,7 +1671,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     if (!p.explained) { flashTerminal("run explain before placing the block", false); p.slateMesh.position.set(p.beltX, BELT_Y, 2); return; }
     if (sl.bayIdx !== p.targetSlot) {             // wrong bay → bounce it back (don't reveal what it was)
       p.slateMesh.position.set(p.beltX, BELT_Y, 2);
-      spawnSpark(sl.slotPos.clone(), 0xff3b2e, 12);
+      spawnSpark(sl.slotPos.clone(), 0xe45572, 12);
       flashTerminal(`✗ that's not the ${sl.data.name.toLowerCase()} fix — re-read the report and try the bay it really belongs to`, false);
       return;
     }
@@ -1141,18 +1680,19 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       flashTerminal(`that ${sl.data.name.toLowerCase()} square's taken — drop it in the other one`, false);
       return;
     }
-    // correct! installing UNSEALS it — the ice comes off and the improvised part appears
+    // correct! The square confirms the match; the work stays sealed as green ice.
     p.state = "placed"; p.placedIn = sl.idx; p.installT = PART_MELT;
     const i = belted.indexOf(p.idx); if (i >= 0) belted.splice(i, 1);
     const slate = p.slateMesh;
-    slate.userData.ice.visible = false;
-    slate.userData.upgradeModel.visible = true;
+    freezeMatchedSlate(slate);
     sl.slot.userData.holder.add(slate);
-    slate.position.set(0, -0.1, 0.34); slate.scale.setScalar(0.34);
-    const anim = slate.userData.upgradeModel.userData.anim;
-    if (anim?.type === "spire") anim.beam.visible = false;
+    slate.position.copy(MATCHED_SLATE_POS); slate.scale.setScalar(MATCHED_SLATE_SCALE);
     if (reviewPart === p) closePanel();
     updateSystems();
+    if (practiceMode && p.idx === PRACTICE_PART_IDX) {
+      finishPractice();
+      return;
+    }
     if (allPlaced()) {
       panelMode = "report"; buffer = "";
       flashTerminal("all blocks matched — run dispatch to file the day", true);
@@ -1165,24 +1705,26 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   function sendDispatch() {
     reportSent = true; timerRunning = false; countdownEl?.classList.remove("is-low", "is-critical");
     renderBoard();
-    if (termList) {
-      termList.innerHTML =
-        `<div class="term-list-row"><span class="tl-key tl-exp-key">DISPATCH</span><span class="tl-title">drone bay — day report</span></div>` +
-        parts.map((p) => `<div class="term-list-row"><span class="tl-key tl-exp-key">·</span><span class="tl-title">${p.data.name.toLowerCase()} → ${p.data.became} (${p.data.ckpt.slice(0, 6)}…)</span></div>`).join("") +
-        `<div class="term-list-row"><span class="tl-key tl-exp-key">filed</span><span class="tl-title">from ${parts.length} checkpoints · crew: 1 human, ${N_DRONES} subagents</span></div>`;
-      termList.classList.remove("hidden");
+    if (termMsg) {
+      clearTimeout(msgTimer);
+      termMsg.textContent = "";
+      termMsg.classList.remove("show-ok", "show-err");
     }
-    flashTerminal("dispatch sent — look how much got done without you", true);
+    renderWinReport();
     renderPanel();
-    if (winSub) winSub.textContent = `${parts.length} jobs, ${N_DRONES} subagents — the report wrote itself`;
     winTimer = setTimeout(() => { closePanel(); tutorialEl?.classList.add("hidden"); winEl?.classList.remove("hidden"); }, 3600);
     onComplete?.();
   }
   // Placement is graded at drop time (a wrong bay never sticks), so every placed
-  // block is already correct here — dispatch just locks them in green and files.
+  // block is already correct here — dispatch just keeps the green ice and files.
   function gradeAndDispatch() {
     for (const p of parts) {
-      if (p.state === "placed") { p.state = "online"; p.installT = PART_MELT; spawnSpark(slots[p.placedIn]?.slot.position.clone() || new THREE.Vector3(), 0x7cffb0, 14); }
+      if (p.state === "placed") {
+        p.state = "online";
+        p.installT = PART_MELT;
+        freezeMatchedSlate(p.slateMesh);
+        spawnSpark(slots[p.placedIn]?.slot.position.clone() || new THREE.Vector3(), ICE_MATCHED, 14);
+      }
     }
     updateSystems();
     sendDispatch();
@@ -1199,38 +1741,41 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   }
 
   // ---------- fail / reset ----------
-  function failLevel() { if (failed || reportSent) return; failed = true; timerRunning = false; closePanel(); renderBoard(); countdownEl?.classList.remove("is-low", "is-critical"); tutorialEl?.classList.add("hidden"); failEl?.classList.remove("hidden"); }
+  function failLevel() {
+    if (failed || reportSent) return;
+    failed = true; timerRunning = false; practiceMode = false;
+    closePanel(); hideModePrompt(); hideRepairLesson(); renderBoard();
+    countdownEl?.classList.remove("is-low", "is-critical");
+    tutorialEl?.classList.add("hidden");
+    const accounted = parts.filter((p) => p.state === "placed" || p.state === "online").length;
+    if (failTitle) failTitle.textContent = "TIME'S UP";
+    if (failSub) failSub.textContent = `You've only accounted for ${accounted} of ${parts.length} repairs.`;
+    failEl?.classList.remove("hidden");
+  }
   function resetLevel() {
-    failed = false; reportSent = false; clearTimeout(winTimer); closePanel();
-    elapsed = 0; timeLeft = TOTAL_TIME; timerRunning = true; boardRenderT = 0; belted.length = 0;
-    picked = null; dragging = false;
-    slotCells = shuffled(slots.length); pendingQueue = shuffled(TOTAL_JOBS); jobsSpawned = 0; spawnTimer = 0;
-    slots.forEach((sl, i) => {
-      sl.slotPos.copy(cellPos(slotCells[i])); sl.slot.position.copy(sl.slotPos);
-    });
-    parts.forEach((p, i) => {
-      if (p.slateMesh) { p.slateMesh.parent?.remove(p.slateMesh); scene.remove(p.slateMesh); p.slateMesh = null; }
-      p.state = "queued"; p.placedIn = null; p.explained = false; p.fixT = 0; p.installT = 0; p.beltX = ENTRANCE_X; p.patience = 0; p.dotIdx = null;
-    });
-    for (let i = 0; i < jobDots.length; i++) {
-      const j = jobDots[i];
-      j.spawned = false; j.taken = false; j.partIdx = null; j.heat = DOT_START_HEAT; j.wait = 0;
-      j.group.visible = false;
-    }
-    for (const d of drones) { d.busy = false; d.part = null; d.phase = "home"; d.flyProg = 0; d.weldAt = null; d.mesh.position.copy(d.home); }
-    spawnInitialDots();
+    failed = false; reportSent = false; practiceMode = false; clearTimeout(winTimer);
+    resetWorkState();
+    elapsed = 0; timeLeft = TOTAL_TIME; timerRunning = false; boardRenderT = 0;
     failEl?.classList.add("hidden"); winEl?.classList.add("hidden");
+    if (practiceComplete) {
+      started = true;
+      restorePracticePart();
+      showModePrompt("level");
+    } else {
+      started = false;
+      showModePrompt("tutorial");
+    }
     updateSystems(); updateClock();
   }
 
   // ---------- input ----------
   function onPointerDown(e) {
-    if (!active || !started || failed || reportSent || panelMode === "report") return;
+    if (!active || !started || failed || reportSent || panelMode === "report" || visibleModePromptKind()) return;
     downX = e.clientX; downY = e.clientY; dragging = false;
     picked = slateAtPointer(e);   // a belt slate we might drag
   }
   function onPointerMove(e) {
-    if (!active || !started || failed) { canvas.style.cursor = "default"; return; }
+    if (!active || !started || failed || visibleModePromptKind()) { canvas.style.cursor = "default"; return; }
     if (picked && !dragging && Math.hypot(e.clientX - downX, e.clientY - downY) > 6) {
       if (!picked.explained) {
         canvas.style.cursor = "pointer";
@@ -1244,7 +1789,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     canvas.style.cursor = s ? "pointer" : "default";   // slates + dispatch dots are clickable
   }
   function onPointerUp(e) {
-    if (!active || !started || failed) return;
+    if (!active || !started || failed || visibleModePromptKind()) return;
     if (dragging && picked) {
       const sl = slotAtPointer(e);
       if (sl && picked.state === "review" && slotHasRoom(sl.idx)) placePart(picked, sl);   // drop into any bay with room
@@ -1252,37 +1797,47 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       picked = null; dragging = false; canvas.style.cursor = "default"; return;
     }
     if (picked) { explainPart(picked); picked = null; return; }   // a click on a sealed slate = explain
-    const jd = dotAtPointer(e);                                    // a click on a red dot = dispatch
+    const jd = dotAtPointer(e);                                    // a click on a waiting pip = dispatch
     if (jd) dispatchFromDot(jd);
   }
   function onKeyDown(e) {
     if (!active) return;
+    if (visibleModePromptKind()) {
+      if (e.code === "Enter" || e.code === "Space") {
+        acceptModePrompt();
+        e.preventDefault();
+      }
+      return;
+    }
     if (!started) { if (e.code === "Enter" || e.code === "Space") { advanceBriefing(); e.preventDefault(); } return; }
     if (failed) { if (e.code === "KeyR") { resetLevel(); e.preventDefault(); } if (e.code === "KeyN") { onNewGame?.(); e.preventDefault(); } return; }
-    if (reportSent) { if (e.code === "Enter") { onNext?.(); e.preventDefault(); } return; }
+    if (reportSent) {
+      if (e.code === "Enter") { onNext?.(); e.preventDefault(); }
+      if (e.code === "KeyB") { onExit?.(); e.preventDefault(); }
+      return;
+    }
+    if (panelMode === "review" && practiceMode && reviewPart?.idx === PRACTICE_PART_IDX && e.code === "Space") {
+      continueReview();
+      e.preventDefault();
+      return;
+    }
     if (panelMode === "report") {
       if (e.code === "Enter") { submitCommand(); e.preventDefault(); return; }
       if (e.code === "Backspace") { buffer = buffer.slice(0, -1); renderPanel(); e.preventDefault(); return; }
       if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { buffer += e.key; renderPanel(); e.preventDefault(); }
       return;
     }
-    if (e.code === "Escape" && panelMode === "review") { closePanel(); e.preventDefault(); return; }
+    if (e.code === "Escape" && panelMode === "review") {
+      continueReview();
+      e.preventDefault();
+      return;
+    }
     if (e.code === "KeyB") { onExit?.(); e.preventDefault(); }
   }
 
   // ---------- prompts ----------
   function refreshHud() {
-    if (!started) { setPrompt(null); return; }
-    if (reportSent) { setPrompt("The day is dispatched — press Enter to board the ship"); return; }
-    if (panelMode === "report" || allPlaced()) { setPrompt("All blocks placed — type `entire dispatch` to lock in the matches"); return; }
-    if (dragging) { setPrompt("Drop it into the bay you think it belongs in"); return; }
-    if (meltingCount() > 0) { setPrompt(`${meltingCount()} block${meltingCount() === 1 ? " is" : "s are"} melting — install before the ice is gone or the work is lost`); return; }
-    if (belted.some((i) => parts[i].explained)) { setPrompt("Drag the explained block to the bay you deduced from its report"); return; }
-    if (urgentDotCount() > 0 && beltCount() < VISIBLE_SLOTS) { setPrompt(`${urgentDotCount()} dispatch pip${urgentDotCount() === 1 ? "" : "s"} turning red — send a subagent before it gets worse`); return; }
-    if (beltCount() > 0) { setPrompt("Click a sealed block to run `entire checkpoint explain` and read what it did"); return; }
-    if (brokenCount() > 0) { setPrompt("White dispatch pips on the board — click one to send a subagent"); return; }
-    if (jobsSpawned < TOTAL_JOBS) { setPrompt("New dispatch pips incoming — watch the board and belt"); return; }
-    setPrompt("Subagents are working — watch the belt");
+    setPrompt(null);
   }
 
   // ---------- per-frame ----------
@@ -1317,7 +1872,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     applyPanicSky();
     beltTex.offset.x = (beltTex.offset.x - dt * 0.6) % 1;
 
-    // dispatch dots: newly arrived jobs start white, then heat toward red as they wait
+    // dispatch dots: newly arrived jobs start pale, then heat toward rose as they wait
     for (let i = 0; i < jobDots.length; i++) {
       const j = jobDots[i]; if (!j.spawned || j.taken) continue;
       const heat = Math.max(0, Math.min(1, j.heat));
@@ -1348,9 +1903,9 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       const ud = sl.slot.userData;
       const occ = slotOccupants(sl.idx);
       const filed = occ.length && occ.every((p) => p.state === "online");
-      let col = 0x35506a, op = 0.4;
-      if (filed) { col = RING.online; op = 0.74; }
-      else if (occ.length) { col = RING.online; op = 0.68; }
+      let col = RING.broken, op = 0.68;
+      if (filed) { col = RING.online; op = 0.88; }
+      else if (occ.length) { col = RING.online; op = 0.8; }
       ud.edgeMat.color.setHex(col); ud.edgeMat.opacity = op; ud.frameMat.emissive.setHex(0x000000);
       ud.hint.visible = false;
     }
@@ -1358,9 +1913,8 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     for (const p of parts) {
       if (p.state === "online") {
         if (p.installT > 0) p.installT = Math.max(0, p.installT - dt);
-        const anim = p.slateMesh?.userData.upgradeModel.userData.anim;
-        if (anim?.type === "ring") anim.ring.rotation.y += dt * 0.8;
-        else if (anim?.type === "dome") { anim.field.rotation.y += dt * 0.25; anim.orbit.rotation.z += dt * 0.6; }
+        const ice = p.slateMesh?.userData.ice;
+        if (ice) ice.rotation.y += dt * 0.45;
       }
     }
 
@@ -1375,8 +1929,8 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       const bob = Math.sin((t + slot) * 2) * 0.08;
       p.slateMesh.position.set(p.beltX, BELT_Y + bob, 2);
       p.slateMesh.visible = onScreen || p.beltX < ENTRANCE_X + 0.5;
-      // the ICE is the patience meter — it stays sealed, but ages icy-blue → amber →
-      // red and then visibly melts (shrinks + flickers) as the block runs out of time.
+      // the ICE is the patience meter — it stays sealed, but ages lavender → amber →
+      // rose and then visibly melts (shrinks + flickers) as the block runs out of time.
       const ice = p.slateMesh.userData.ice;
       const u = urgencyOf(p);
       const c = u < ICE_WARM_AT
@@ -1390,17 +1944,17 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       ice.position.y = SLATE_ICE_Y - (1 - melt) * 0.55;
       ice.material.opacity = u > ICE_MELT_AT ? 0.5 + 0.25 * Math.sin(t * 9) : 0.62;
       const rim = p.slateMesh.userData.rim;
-      rim.material.color.setHex(0x6fe3ff);
+      rim.material.color.setHex(0xb9a7ff);
       rim.material.opacity = 0.45 + 0.3 * u;
       slot++;
     }
 
-    // rack lamps: green means the subagent is docked/free, amber means out working
+    // rack lamps: lavender means the subagent is docked/free, amber means out working
     for (let i = 0; i < droneRack.dockLights.length; i++) {
       const lamp = droneRack.dockLights[i];
       const busy = !!drones[i]?.busy;
       const pulse = 0.5 + 0.5 * Math.sin(t * (busy ? 7.0 : 2.4) + i);
-      const color = busy ? 0xffd27a : 0x7cffb0;
+      const color = busy ? GOLD : 0xd8ccff;
       lamp.material.color.setHex(color);
       lamp.material.emissive.setHex(color);
       lamp.material.emissiveIntensity = busy ? 0.9 + pulse * 0.85 : 1.0 + pulse * 0.28;
@@ -1410,6 +1964,9 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     // drones: fly to the slot, weld, then home; frozen work hits the belt when done
     for (const d of drones) {
       const ud = d.mesh.userData;
+      const targetDroneScale = d.phase === "home" ? 1 : 0.62;
+      const droneScale = d.mesh.scale.x + (targetDroneScale - d.mesh.scale.x) * Math.min(1, dt * 7);
+      d.mesh.scale.setScalar(droneScale);
       const spin = d.phase === "work" ? 9 : (d.phase === "out" || d.phase === "back") ? 6 : 1.2;
       ud.halo.rotation.z += spin * dt;
       ud.craft.position.y = 2.6 + Math.sin((t + d.home.x) * 2.2) * 0.14;
@@ -1421,13 +1978,17 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
         d.mesh.position.lerpVectors(a, b, k);
         ud.glow.material.opacity = 0.3;
         if (d.flyProg >= 1) {
-          if (d.phase === "out") { d.phase = "work"; d.part.fixT = (d.part.data.fix ?? PART_FIX_FALLBACK) + Math.random() * PART_FIX_JITTER; }
+          if (d.phase === "out") {
+            d.phase = "work";
+            const fixTime = (d.part.data.fix ?? PART_FIX_FALLBACK) + Math.random() * PART_FIX_JITTER;
+            d.part.fixT = practiceMode && d.part.idx === PRACTICE_PART_IDX ? Math.min(fixTime, PRACTICE_FIX_TIME) : fixTime;
+          }
           else { const wasPart = d.part; d.phase = "home"; d.busy = false; d.part = null; d.mesh.position.copy(d.home); void wasPart; }
         }
       } else if (d.phase === "work") {
         d.part.fixT = Math.max(0, d.part.fixT - dt);
         ud.bodyMat.emissiveIntensity = 1.2 + 0.6 * Math.sin(t * 10);
-        if (Math.random() < dt * 14) { const tip = ud.craft.getWorldPosition(new THREE.Vector3()); tip.y -= 0.8; spawnSpark(tip, 0xffb86b, 4); }
+        if (Math.random() < dt * 14) { const tip = ud.craft.getWorldPosition(new THREE.Vector3()); tip.y -= 0.8; spawnSpark(tip, GOLD, 4); }
         if (d.part.fixT <= 0) { partToBelt(d.part); d.phase = "back"; d.flyProg = 0; }
       } else { ud.bodyMat.emissiveIntensity = 0.7 + 0.2 * Math.sin(t * 2 + d.home.x); ud.glow.material.opacity = 0.12; }
     }
@@ -1440,6 +2001,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       if (s.life >= s.ttl) { scene.remove(s.pts); s.geo.dispose(); s.mat.dispose(); sparks.splice(i, 1); }
     }
 
+    updateTutorialFocus(t);
     if (active) refreshHud();
   }
 
@@ -1451,8 +2013,14 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     window.addEventListener("mouseup", onPointerUp);
     window.addEventListener("keydown", onKeyDown);
     dbHud?.classList.remove("hidden"); fpShared?.classList.remove("hidden"); boardEl?.classList.add("hidden");
-    setControls(); updateSystems();
-    if (!started) showBriefing();
+    termEl?.classList.add("is-drone-bay-terminal");
+    setControls(); updateSystems(); renderWinReport();
+    if (modePromptState) showModePrompt(modePromptState);
+    else if (!started) showBriefing();
+    else if (practiceMode) {
+      timerRunning = false;
+      if (lessonKey) renderRepairLesson(lessonKey);
+    }
     else if (reportSent) winEl?.classList.remove("hidden");
     else if (failed) resetLevel();
     else { timerRunning = !allOnline(); tutorialEl?.classList.add("hidden"); }
@@ -1467,7 +2035,9 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     canvas.style.cursor = "default"; setPrompt(null); hideControls();
     tutorialEl?.classList.add("hidden"); termEl?.classList.add("hidden");
     failEl?.classList.add("hidden"); winEl?.classList.add("hidden"); briefingEl?.classList.add("hidden");
+    modePrompt?.classList.add("hidden"); missionLesson?.classList.add("hidden");
     dbHud?.classList.add("hidden"); fpShared?.classList.add("hidden"); boardEl?.classList.add("hidden");
+    termEl?.classList.remove("is-drone-bay-terminal");
   }
   function resize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
 
