@@ -1768,6 +1768,63 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     updateSystems(); updateClock();
   }
 
+  function placeAllPartsOnlineForShortcut() {
+    resetWorkState();
+    jobsSpawned = TOTAL_JOBS;
+    for (const p of parts) {
+      const sl = slots.find((slot) => slot.bayIdx === p.targetSlot && slotHasRoom(slot.idx));
+      if (!sl) continue;
+      p.state = "online";
+      p.placedIn = sl.idx;
+      p.explained = true;
+      p.patience = PATIENCE;
+      p.installT = 0;
+      p.dotIdx = p.idx;
+      const slate = buildSlate(BUILD[p.data.upgrade]());
+      slate.userData.partIdx = p.idx;
+      p.slateMesh = slate;
+      freezeMatchedSlate(slate);
+      sl.slot.userData.holder.add(slate);
+      slate.position.copy(MATCHED_SLATE_POS);
+      slate.scale.setScalar(MATCHED_SLATE_SCALE);
+    }
+  }
+
+  function skipToEnd(outcome) {
+    clearTimeout(winTimer);
+    hideModePrompt();
+    hideRepairLesson();
+    closePanel();
+    briefingEl?.classList.add("hidden");
+    tutorialEl?.classList.add("hidden");
+    started = true;
+    practiceMode = false;
+    practiceComplete = true;
+    elapsed = 0;
+    timeLeft = 0;
+    timerRunning = false;
+    boardRenderT = 0;
+    failed = false;
+    reportSent = false;
+    failEl?.classList.add("hidden");
+    winEl?.classList.add("hidden");
+
+    if (outcome === "success") {
+      placeAllPartsOnlineForShortcut();
+      reportSent = true;
+      renderWinReport();
+      updateSystems();
+      winEl?.classList.remove("hidden");
+      onComplete?.();
+    } else {
+      resetWorkState();
+      failLevel();
+    }
+
+    updateClock();
+    applyPanicSky();
+  }
+
   // ---------- input ----------
   function onPointerDown(e) {
     if (!active || !started || failed || reportSent || panelMode === "report" || visibleModePromptKind()) return;
@@ -1812,8 +1869,8 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     if (!started) { if (e.code === "Enter" || e.code === "Space") { advanceBriefing(); e.preventDefault(); } return; }
     if (failed) { if (e.code === "KeyR") { resetLevel(); e.preventDefault(); } if (e.code === "KeyN") { onNewGame?.(); e.preventDefault(); } return; }
     if (reportSent) {
-      if (e.code === "Enter") { onNext?.(); e.preventDefault(); }
-      if (e.code === "KeyB") { onExit?.(); e.preventDefault(); }
+      onNext?.();
+      e.preventDefault();
       return;
     }
     if (panelMode === "review" && practiceMode && reviewPart?.idx === PRACTICE_PART_IDX && e.code === "Space") {
@@ -2041,5 +2098,5 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   }
   function resize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
 
-  return { scene, get camera() { return camera; }, update, enter, exit, resize };
+  return { scene, get camera() { return camera; }, update, enter, exit, resize, skipToEnd };
 }

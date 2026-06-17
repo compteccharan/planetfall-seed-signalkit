@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createTerrain } from "./terrain.js";
 import { makeBeamTexture } from "./memoryProps.js";
 import { SYSTEMS, UPGRADE_BUILDERS } from "./droneBayView.js";
+import { LEVEL_ONE_ARCHIVE_ROWS } from "./levelOneRecords.js";
 
 // LEVEL 3 ("Launch Clearance") — the finale. The ship is rebuilt; now it has
 // to fly. The player sits in the pilot's chair for the first time, and the
@@ -49,9 +50,7 @@ const RIG_EYE = 19;
 // The full record Level 3 quizzes: Level 1's three banked memories (ids match
 // the Archive's continuity touch) plus Level 2's five subagent repairs.
 const L1_RECORD = [
-  ["31f0cafe4d12", "recovered: abandoned EVA helmet"],
-  ["7e11a2b09c44", "recovered: torn logbook page"],
-  ["b0a7ded51a6e", "recovered: cracked nav panel"],
+  ...LEVEL_ONE_ARCHIVE_ROWS,
 ];
 const RECORD_TOTAL = L1_RECORD.length + SYSTEMS.length; // 8
 
@@ -732,6 +731,62 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     renderQuestion();
   }
 
+  function showWinForShortcut() {
+    for (const Q of QUESTIONS) Q.done = true;
+    for (const s of sites) {
+      s.confirmed = true;
+      s.flareT = 0;
+      s.beam.visible = true;
+      s.beam.material.opacity = 1;
+    }
+    started = true;
+    failed = false;
+    igniting = false;
+    launched = true;
+    won = true;
+    liftT = LIFT_DUR;
+    timerRunning = false;
+    phase = "done";
+    rig.position.y = Math.max(rig.position.y, 420);
+    camera.rotation.x = baseRotX - 0.5;
+    camera.rotation.y = baseRotY;
+    camera.rotation.z = 0;
+    starMat.opacity = 1;
+    sun.intensity = 0.6;
+    scene.fog.far = 2200;
+    briefingEl?.classList.add("hidden");
+    consoleEl?.classList.add("hidden");
+    failEl?.classList.add("hidden");
+    ignitionEl?.classList.add("hidden");
+    if (winSub) winSub.textContent =
+      `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · 0 guesses`;
+    winEl?.classList.remove("hidden");
+    renderCode();
+  }
+
+  function skipToEnd(outcome) {
+    clearTimeout(nextTimer);
+    clearTimeout(msgTimer);
+    flashEl?.classList.remove("show");
+    if (outcome === "success") {
+      showWinForShortcut();
+    } else {
+      started = true;
+      failed = false;
+      igniting = false;
+      launched = false;
+      won = false;
+      timerRunning = false;
+      briefingEl?.classList.add("hidden");
+      consoleEl?.classList.add("hidden");
+      winEl?.classList.add("hidden");
+      ignitionEl?.classList.add("hidden");
+      failLevel();
+    }
+    updateClock();
+    applySky();
+  }
+
   // ---------- input ----------
   function onKeyDown(e) {
     if (!active) return;
@@ -883,5 +938,5 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     camera.updateProjectionMatrix();
   }
 
-  return { scene, camera, update, enter, exit, resize };
+  return { scene, camera, update, enter, exit, resize, skipToEnd };
 }

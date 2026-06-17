@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { createTerrain } from "./terrain.js";
-import { FRAGMENTS } from "./debris.js";
 import { genCheckpointId, makeIceBlock } from "./memoryProps.js";
 import { makeRecord, makeWreck } from "./fallingProps.js";
+import { levelOneRecordSummary } from "./levelOneRecords.js";
 import { sfx } from "./sfx.js";
 
 // LEVEL 1 — "First Memories", rebuilt as a falling-records shooter.
@@ -37,7 +37,7 @@ const SPAWN_Y = 56;
 const DESPAWN_Y = 1.0;
 const SPAWN_X = 32;          // half-width records can fall within
 const RECORD_SCALE = 3.0;
-const WRECK_SCALE = 2.6;
+const WRECK_SCALE = 3.2;
 const MAX_FALLING = 8;
 
 // Escalation — the run gets harder as the clock drains (0 at start, 1 at 0:00):
@@ -61,7 +61,7 @@ const SUN_CALM  = new THREE.Color(0xfff1dc);
 const SUN_PANIC = new THREE.Color(0xff5a3c);
 
 const BRIEFING_BEATS = [
-  "Shoot the gold records and avoid the wreckage.",
+  "Shoot the gold-ringed ship parts and avoid the junk.",
 ];
 
 const MODE_PROMPTS = {
@@ -485,6 +485,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
         timeLeft = Math.max(0, timeLeft - WRECK_PENALTY);
         updateClock();
       }
+      showTutorial("wreckage hit", 1400);
       flashScreen();
       shakeT = 0.25;
     }
@@ -575,11 +576,15 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     terminalOpen = true;
     termMsg?.classList.remove("show-ok", "show-err");
     termList?.classList.add("hidden");
+    termList?.classList.remove("is-l1-checkpoint-list");
+    termEl?.classList.remove("is-l1-checkpoint-terminal");
     termEl?.classList.remove("hidden");
     renderTerminal();
   }
   function closeTerminal() {
     terminalOpen = false;
+    termList?.classList.remove("is-l1-checkpoint-list");
+    termEl?.classList.remove("is-l1-checkpoint-terminal");
     termEl?.classList.add("hidden");
   }
   function renderTerminal() {
@@ -620,6 +625,13 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     termMsg.classList.remove("show-ok", "show-err");
     termMsg.classList.add(ok ? "show-ok" : "show-err");
     msgTimer = setTimeout(() => termMsg.classList.remove("show-ok", "show-err"), 2400);
+  }
+  function shortCheckpointId(id, ids) {
+    for (let len = 4; len <= id.length; len++) {
+      const prefix = id.slice(0, len);
+      if (ids.filter((other) => other.slice(0, len) === prefix).length === 1) return prefix;
+    }
+    return id;
   }
   function submitCommand() {
     const step = currentStep();
@@ -674,9 +686,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
       sfx.wrong();
       return;
     }
-    const frag = FRAGMENTS[banked % FRAGMENTS.length];
     const id = genCheckpointId();
-    const record = { frag, id };
+    const summary = bankTarget?.userData.recordSummary || levelOneRecordSummary(bankedRecords.length);
+    const record = { id, summary };
     bankedRecords.push(record);
     banked += 1;
     updateTally();
@@ -699,11 +711,13 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     timerRunning = false;
     countdownEl?.classList.remove("is-low", "is-critical");
     if (termList) {
-      termList.innerHTML = bankedRecords.map(({ frag, id }) =>
-        `<div class="term-list-row"><span class="tl-id">` +
-        `<span class="tl-key">Entire-Checkpoint:</span> ${id}</span>` +
-        `<span class="tl-title">recovered: ${frag.title}</span></div>`
+      const ids = bankedRecords.map(({ id }) => id);
+      termList.innerHTML = bankedRecords.map(({ id, summary }) =>
+        `<div class="term-list-row"><span class="tl-id tl-id-short">${shortCheckpointId(id, ids)}</span>` +
+        `<span class="tl-title">${summary}</span></div>`
       ).join("");
+      termList.classList.add("is-l1-checkpoint-list");
+      termEl?.classList.add("is-l1-checkpoint-terminal");
     }
     flashTerminal(`${banked} checkpoints linked · ship memory restored`, true);
     renderTerminal();
@@ -795,6 +809,51 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   }
   briefingEl?.addEventListener("click", advanceBriefing);
   modeAction?.addEventListener("click", acceptModePrompt);
+
+  function seedEndShortcutRecords(count) {
+    bankedRecords.length = 0;
+    for (let i = 0; i < count; i++) {
+      bankedRecords.push({
+        id: genCheckpointId(),
+        summary: levelOneRecordSummary(i),
+      });
+    }
+    banked = count;
+    updateTally();
+  }
+
+  function skipToEnd(outcome) {
+    clearFalling();
+    clearBankPiece();
+    hideModePrompt();
+    hideBankLesson();
+    briefingEl?.classList.add("hidden");
+    tutorialEl?.classList.add("hidden");
+    started = true;
+    timedRunStarted = false;
+    timerRunning = false;
+    timeLeft = 0;
+    banking = false;
+    bankState = "done";
+    lessonPaused = false;
+    lessonNarrating = false;
+    reviewMode = outcome === "success";
+    listShown = false;
+    failed = false;
+    levelFail?.classList.add("hidden");
+
+    if (outcome === "success") {
+      seedEndShortcutRecords(MIN_TO_PASS);
+      openTerminal();
+      showCheckpointList();
+    } else {
+      seedEndShortcutRecords(Math.max(0, MIN_TO_PASS - 1));
+      failRun();
+    }
+
+    updateClock();
+    applyPanicSky();
+  }
 
   // ---------- input ----------
   function onMouseMove(e) {
@@ -928,8 +987,6 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
       }
       if (f.kind === "record") {
         const pulse = 0.5 + 0.5 * Math.sin(t * 5 + f.group.position.x * 0.13);
-        if (f.group.userData.badge) f.group.userData.badge.material.opacity = 0.78 + pulse * 0.18;
-        if (f.group.userData.trail) f.group.userData.trail.material.opacity = 0.28 + pulse * 0.18;
         if (f.group.userData.beacon) f.group.userData.beacon.intensity = 2.2 + pulse * 1.3;
       }
       if (f.group.position.y <= DESPAWN_Y) removeFalling(f);
@@ -1021,7 +1078,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     camera.updateProjectionMatrix();
   }
 
-  return { scene, get camera() { return camera; }, update, enter, exit, resize };
+  return { scene, get camera() { return camera; }, update, enter, exit, resize, skipToEnd };
 }
 
 // ---------- backdrop meshes ----------

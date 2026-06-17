@@ -3,6 +3,7 @@ import { createTerrain } from "./terrain.js";
 import { createFirstPerson } from "./firstPerson.js";
 import { createOverhead } from "./overhead.js";
 import { makeBeamTexture, makeIceBlock, makeIdSprite } from "./memoryProps.js";
+import { LEVEL_ONE_ARCHIVE_RECORDS } from "./levelOneRecords.js";
 
 // LEVEL 2 ("The Archive") — the same island, revisited.
 //
@@ -64,9 +65,7 @@ const ARCHIVE = [
   { id: "9d4e1f7a02bc", summary: "ignition timing tuned — engines certified for cold start" },
   { id: "5b82c3d9e016", summary: "starmap charted — a route home through the lavender belt" },
   { id: "c7f0a45d138e", summary: "long-range antenna aligned — relay handshake held steady" },
-  { id: "31f0cafe4d12", summary: "recovered: abandoned EVA helmet" },
-  { id: "7e11a2b09c44", summary: "recovered: torn logbook page" },
-  { id: "b0a7ded51a6e", summary: "recovered: cracked nav panel" },
+  ...LEVEL_ONE_ARCHIVE_RECORDS,
   { id: "2b90cc41d7ae", summary: "ballast trim balanced for the sea crossing" },
   { id: "f7d3a2e85c10", summary: "hull seams resealed after the first squall" },
   { id: "4c61e0b9d827", summary: "water recycler filters swapped and flushed" },

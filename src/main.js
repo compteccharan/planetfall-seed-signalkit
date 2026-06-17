@@ -112,8 +112,43 @@ if (bgm && audioPanel && audioToggle && audioMute && audioVolume) {
 
 const params = new URLSearchParams(location.search);
 const requestedView = params.get("view");
-const jumpToLevel2 = requestedView === "level2" || params.get("level") === "2";
-const jumpToLevel3 = requestedView === "level3" || params.get("level") === "3";
+
+function normalizeEndOutcome(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (["success", "succeed", "succeeded", "win", "won", "pass", "passed"].includes(v)) return "success";
+  if (["fail", "failed", "failure", "miss", "missed", "loss", "lose", "lost"].includes(v)) return "failure";
+  return null;
+}
+
+function parseEndShortcut() {
+  const directOutcome =
+    normalizeEndOutcome(params.get("end")) ||
+    normalizeEndOutcome(params.get("result")) ||
+    normalizeEndOutcome(params.get("outcome"));
+  const explicitLevel = Number(params.get("level"));
+  const viewLevel = requestedView === "island" ? 1
+    : requestedView === "level2" ? 2
+    : requestedView === "level3" ? 3 : null;
+  let level = [1, 2, 3].includes(explicitLevel) ? explicitLevel : viewLevel;
+  let outcome = directOutcome;
+
+  const skip = params.get("skip") || params.get("shortcut");
+  if (skip) {
+    const compact = skip.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const levelMatch = compact.match(/(?:level|lvl|l)?([123])/);
+    const outcomeMatch = compact.match(/success|succeed|succeeded|win|won|pass|passed|fail|failed|failure|miss|missed|loss|lose|lost/);
+    if (!level && levelMatch) level = Number(levelMatch[1]);
+    if (!outcome && outcomeMatch) outcome = normalizeEndOutcome(outcomeMatch[0]);
+  }
+
+  if (!outcome && params.has("success")) outcome = "success";
+  if (!outcome && params.has("fail")) outcome = "failure";
+  return level && outcome ? { level, outcome } : null;
+}
+
+const endShortcut = parseEndShortcut();
+const jumpToLevel2 = endShortcut?.level === 2 || requestedView === "level2" || params.get("level") === "2";
+const jumpToLevel3 = endShortcut?.level === 3 || requestedView === "level3" || params.get("level") === "3";
 
 // ---------- views ----------
 // After Level 1's `entire checkpoint list`, the ship wakes its drone bay:
@@ -162,10 +197,12 @@ const launchView = createLaunchView(renderer, {
 // ?view=level2 (or ?level=2) to Level 2, ?view=level3 (or ?level=3) to the
 // finale, ?view=archive to the shelved search level — handy for development.
 let current = requestedView === "island" ? islandView
+  : endShortcut?.level === 1 ? islandView
   : requestedView === "archive" ? archiveView
   : jumpToLevel3 ? launchView
   : jumpToLevel2 ? droneBayView : planetView;
 current.enter();
+endShortcut && current.skipToEnd?.(endShortcut.outcome);
 
 // Title screen on a clean boot only — the dev shortcuts skip straight in.
 // While it's up the orbit view runs behind it as the attract backdrop.
@@ -179,7 +216,7 @@ const titleScreen = createTitleScreen({
   },
   onStart: () => planetView.setLandingMarkerHold(false),
 });
-if (!requestedView && !params.get("level")) titleScreen.show();
+if (!requestedView && !params.get("level") && !endShortcut) titleScreen.show();
 
 // ---------- fade transition ----------
 const fade = document.getElementById("fade");

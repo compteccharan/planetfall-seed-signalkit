@@ -1873,6 +1873,49 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 
 /* Level 2 archive rows: just id + summary, so the id column stays compact. */
 .tl-id.tl-id-short { min-width: 110px; }
+
+/* Level 1 completion list: short checkpoint prefixes, readable collected parts. */
+#terminal.is-l1-checkpoint-terminal {
+  width: min(760px, calc(100vw - 40px));
+}
+
+#term-list.is-l1-checkpoint-list:not(.hidden) {
+  max-height: 228px;
+  gap: 8px 18px;
+}
+
+@media (min-width: 620px) {
+  #term-list.is-l1-checkpoint-list:not(.hidden) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#term-list.is-l1-checkpoint-list .term-list-row {
+  align-items: baseline;
+  gap: 10px;
+  font-size: 17px;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+#term-list.is-l1-checkpoint-list .tl-id.tl-id-short {
+  flex: none;
+  min-width: 46px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  opacity: 0.92;
+}
+
+#term-list.is-l1-checkpoint-list .tl-title {
+  font-size: 18px;
+  opacity: 0.92;
+}
+
+@media (max-width: 560px) {
+  #term-list.is-l1-checkpoint-list .term-list-row { font-size: 15px; }
+  #term-list.is-l1-checkpoint-list .tl-title { font-size: 16px; }
+}
 /* Explain output rows: key/value pairs (Drone Bay review cards). */
 .tl-exp-key { min-width: 90px; flex: none; }
 

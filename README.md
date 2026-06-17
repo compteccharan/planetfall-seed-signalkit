@@ -40,6 +40,11 @@ Development shortcuts:
 - `?view=level2` (or `?level=2`) — Level 2 with Level 1 checkpoints preloaded.
 - `?view=level3` (or `?level=3`) — Level 3, the cockpit finale.
 - `?view=archive` — a shelved search level kept playable for later.
+- `?level=1&end=success` / `?level=1&end=fail` — jump to Level 1's end state.
+- `?level=2&end=success` / `?level=2&end=fail` — jump to Level 2's end state.
+- `?level=3&end=success` / `?level=3&end=fail` — jump to Level 3's end state.
+- `?skip=level2-fail` also works; `end`, `result`, or `outcome` can be
+  `success`, `win`, `pass`, `fail`, or `failure`.
 
 ## How To Play
 
