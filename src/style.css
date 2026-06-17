@@ -1225,18 +1225,9 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 
 /* ---------- Level 2 HUD ("The Drone Bay") ---------- */
 
-/* Fleet status panel — five systems, four states */
+/* Legacy ship-status readout; dispatch is now the pip-only 3D panel. */
 #db-systems {
-  position: absolute;
-  top: 88px;
-  right: 28px;
-  left: auto;
-  width: min(260px, calc(100vw - 56px));
-  padding: 10px 12px;
-  background: rgba(6, 11, 22, 0.68);
-  border: 1px solid rgba(111, 227, 255, 0.32);
-  border-radius: 8px;
-  backdrop-filter: blur(8px);
+  display: none;
 }
 .db-sys-head {
   font-size: 9px;
@@ -1281,7 +1272,7 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 .db-sys.is-staged .db-sys-name { opacity: 0.6; }
 @keyframes db-work-blink { 50% { opacity: 0.45; } }
 
-/* Aggregate job tally (twelve named rows won't fit, so we summarize) */
+/* Aggregate job tally for the six familiar ship parts */
 .db-jobs {
   display: flex;
   align-items: baseline;
@@ -1296,7 +1287,113 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 .db-tally-it.is-sealed { color: #bfe9ff; }
 .db-tally-it.is-stalled { color: #ff5a3c; font-weight: 700; }
 .db-tally-it.is-cars { color: #ffd27a; }
+.db-tally-it.is-failing { color: #ff8a5c; }
+.db-tally-it.is-urgent { color: #ffd27a; font-weight: 700; }
 
+/* ---- Dispatch board: red system pips you triage (click to send a drone) ---- */
+#db-board {
+  position: absolute;
+  top: 84px;
+  left: 28px;
+  width: min(278px, calc(100vw - 56px));
+  pointer-events: auto;         /* #ui is pointer-events:none — re-enable so pips are clickable */
+  padding: 12px 14px 14px;
+  background: rgba(10, 6, 8, 0.78);
+  border: 1px solid rgba(255, 90, 60, 0.55);
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px rgba(255, 90, 60, 0.12), 0 8px 26px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+#db-board.attention { animation: db-board-attn 1.05s ease-in-out infinite; }
+@keyframes db-board-attn {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 90, 60, 0.2), 0 8px 26px rgba(0,0,0,0.45); border-color: rgba(255,90,60,0.55); }
+  50%      { box-shadow: 0 0 0 3px rgba(255, 90, 60, 0.55), 0 0 28px rgba(255,90,60,0.5); border-color: rgba(255,138,92,0.95); }
+}
+.db-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-board-title { font-size: 12px; letter-spacing: 0.12em; font-weight: 800; color: #ff5a3c; }
+.db-board-free { font-size: 9px; letter-spacing: 0.08em; color: var(--ink); opacity: 0.8; white-space: nowrap; }
+.db-board-free span { color: #7cffb0; font-weight: 700; }
+.db-board-sub { font-size: 10px; letter-spacing: 0.04em; color: var(--ink); opacity: 0.65; margin: 2px 0 9px; }
+.db-board-note { margin-top: 8px; font-size: 10px; letter-spacing: 0.04em; text-align: center; color: #ff8a5c; opacity: 0.85; }
+.db-board-note.db-board-clear { color: var(--ink); opacity: 0.5; }
+#db-board-rows { min-height: 70px; margin-top: 6px; }
+.db-board-map {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 16px;
+  padding: 8px 6px 2px;
+}
+.db-board-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 44px;
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  cursor: default;
+  opacity: 1;
+}
+.db-board-dot:disabled { opacity: 1; }
+.db-board-dot.is-broken { cursor: pointer; }
+.db-board-dot.is-broken:hover .db-dot-core {
+  transform: scale(1.12);
+  box-shadow: 0 0 24px rgba(255, 90, 60, 0.9);
+}
+.db-board-dot.is-broken:active .db-dot-core { transform: scale(0.96); }
+.db-dot-core {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #263142;
+  border: 1px solid rgba(191, 233, 255, 0.25);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55), 0 0 8px rgba(111, 227, 255, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+.db-dot-label {
+  position: absolute;
+  bottom: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: rgba(232, 244, 255, 0.62);
+}
+.db-board-dot.is-broken .db-dot-core {
+  background: #ff3b2e;
+  border-color: rgba(255, 138, 92, 0.95);
+  box-shadow: 0 0 18px rgba(255, 59, 46, 0.72), inset 0 0 8px rgba(255, 210, 122, 0.35);
+  animation: db-pip-blink 0.72s ease-in-out infinite;
+}
+.db-board-dot.is-working .db-dot-core,
+.db-board-dot.is-onbelt .db-dot-core {
+  background: #ffd27a;
+  border-color: rgba(255, 210, 122, 0.9);
+  box-shadow: 0 0 14px rgba(255, 210, 122, 0.45);
+}
+.db-board-dot.is-review .db-dot-core {
+  background: #7cffb0;
+  border-color: rgba(124, 255, 176, 0.95);
+  box-shadow: 0 0 20px rgba(124, 255, 176, 0.7);
+}
+.db-board-dot.is-online .db-dot-core {
+  background: #214734;
+  border-color: rgba(124, 255, 176, 0.6);
+  box-shadow: 0 0 10px rgba(124, 255, 176, 0.25);
+}
+.db-board-dot.is-review .db-dot-label,
+.db-board-dot.is-online .db-dot-label { color: rgba(124, 255, 176, 0.85); }
+@keyframes db-pip-blink {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
 /* Nitro charges — top row of the systems panel */
 .db-nitro {
   display: flex;
@@ -1425,7 +1522,7 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
 }
 
 /* Ship terminal — type the real commands. pointer-events back on so the
-   Drone Bay's ADD TO SHIP button is clickable (#ui is pointer-events:none). */
+   Drone Bay's terminal CTA is clickable (#ui is pointer-events:none). */
 #terminal {
   position: absolute;
   pointer-events: auto;
@@ -1545,27 +1642,6 @@ body.title-up #title-screen.is-story ~ #island-pin:not(.hidden) {
   background: rgba(111, 227, 255, 0.12);
   border: 1px solid rgba(111, 227, 255, 0.28);
 }
-
-/* ADD TO SHIP — the accept button after an explain (Drone Bay) */
-#db-add-btn {
-  padding: 8px 18px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: #04121a;
-  cursor: pointer;
-  background: linear-gradient(90deg, #5cffb0, #bfffe0);
-  border: none;
-  border-radius: 7px;
-  box-shadow: 0 0 18px rgba(92, 255, 176, 0.45);
-  transition: transform 0.12s ease, box-shadow 0.2s ease;
-}
-#db-add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0 26px rgba(92, 255, 176, 0.65);
-}
-#db-add-btn:active { transform: translateY(0); }
 
 /* `entire checkpoint list` / search output. Level 2's full archive listing is
    long on purpose — it scrolls, and that's the lesson. */

@@ -308,13 +308,22 @@
         <!-- Level countdown — one clock for the whole run -->
         <div id="db-countdown">
           <span class="cd-label">TIME</span>
-          <span id="db-countdown-time">2:30</span>
+          <span id="db-countdown-time">3:15</span>
         </div>
 
         <!-- Fleet status — five systems, four states -->
         <div id="db-systems">
           <div class="db-sys-head">SHIP SYSTEMS</div>
           <div id="db-systems-rows"></div>
+        </div>
+
+        <!-- Dispatch board — white pips arrive over time and heat toward red if they sit too long -->
+        <div id="db-board" class="hidden">
+          <div class="db-board-head">
+            <span class="db-board-title">⚠ DISPATCH</span>
+            <span class="db-board-free">subagents free <span id="db-board-free">6 / 6</span></span>
+          </div>
+          <div id="db-board-rows"></div>
         </div>
 
         <!-- The fleet's day is on the record -->
@@ -328,7 +337,7 @@
         <!-- The clock ran out -->
         <div id="db-fail" class="hidden">
           <div class="lf-title">SYSTEMS STILL DARK</div>
-          <div class="lf-sub">The launch window closed before every checkpoint was reviewed and added. The pass floods fast — tap a checkpoint the moment it rides up.</div>
+          <div class="lf-sub">The launch window closed before every returned block was explained and installed. White pips arrive over time and heat toward red when ignored — dispatch aging work, then read sealed returns and match them.</div>
           <div class="lf-hint">press <span class="lf-key">R</span> to try again</div>
           <div class="lf-hint">press <span class="lf-key">N</span> to start over</div>
         </div>
