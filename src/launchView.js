@@ -57,8 +57,8 @@ const RECORD_TOTAL = L1_RECORD.length + SYSTEMS.length; // 8
 
 // Onboarding — short story beats, advanced with Space.
 const BRIEFING_BEATS = [
-  "The ship is rebuilt. You're in the pilot's chair.",
-  "Answer the launch questions from the record. Five correct confirms authorize ignition.",
+  "The ship is rebuilt. To launch, you need clearance.",
+  "Run the right commands to read the records, and use what you find to answer the pre-flight questions.",
 ];
 
 // ---------- the five pre-flight questions ----------
