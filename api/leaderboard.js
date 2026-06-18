@@ -10,6 +10,13 @@ const LEVEL_BASE = {
   2: 50,
   3: 100,
 };
+
+const LEVEL_LIMITS = {
+  1: { totalTime: 48, progressTotal: 5, maxProgress: 30, maxMistakes: 40 },
+  2: { totalTime: 195, progressTotal: 12, maxProgress: 12, maxMistakes: 60 },
+  3: { totalTime: 90, progressTotal: 3, maxProgress: 3, maxMistakes: 40 },
+};
+
 const PROGRESS_POINTS = 10;
 const EXTRA_PROGRESS_POINTS = 3;
 const GAME_CLEAR_BONUS = 50;
@@ -149,6 +156,10 @@ function readInteger(value, fallback = 0) {
   return Math.max(0, Math.round(n));
 }
 
+function readClampedInteger(value, max) {
+  return Math.min(max, readInteger(value));
+}
+
 function readQueryValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -215,20 +226,32 @@ function validateEntry(body) {
     throw err;
   }
 
-  const progressCompleted = readInteger(body.progressCompleted ?? body.questionsCompleted);
-  const progressTotal = Math.max(1, readInteger(body.progressTotal, level === MAX_LEVEL ? 3 : 1));
+  // Clamp inflated scores
+  const limits = LEVEL_LIMITS[level];
   const completedGame = outcome === "win" && level === MAX_LEVEL;
+  const progressCompleted = readClampedInteger(
+    body.progressCompleted ?? body.questionsCompleted,
+    limits.maxProgress
+  );
+  // progressTotal is fixed per level on the server so the client cannot shrink it to inflate the extra-progress bonus.
+  const progressTotal = limits.progressTotal;
+  const durationSeconds = readClampedInteger(body.durationSeconds, limits.totalTime);
+  const mistakes = readClampedInteger(body.mistakes, limits.maxMistakes);
+  const timeRemaining = completedGame
+    ? readClampedInteger(body.timeRemaining, limits.totalTime)
+    : 0;
+
   const entry = {
     id: crypto.randomUUID(),
     username,
     level,
     outcome,
     completedGame,
-    timeRemaining: completedGame ? readInteger(body.timeRemaining) : 0,
-    durationSeconds: readInteger(body.durationSeconds),
+    timeRemaining,
+    durationSeconds,
     progressCompleted,
     progressTotal,
-    mistakes: readInteger(body.mistakes),
+    mistakes,
   };
 
   return {
