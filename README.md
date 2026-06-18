@@ -153,6 +153,11 @@ falls back to an unavailable message.
 Most visual assets are generated at runtime; the music is bundled locally in
 `public/audio/asteroid-circuit.mp3`.
 
+## License
+
+Planetfall is licensed under the GNU General Public License v3.0. See
+`LICENSE` for the full license text.
+
 ## Project History
 
 This repo started as `signalkit`, a Python telemetry CLI. On June 5, 2026 it

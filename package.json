@@ -2,6 +2,7 @@
   "name": "planetfall",
   "version": "0.0.1",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "description": "Planetfall — a stranded astronaut reconstructs a lost ship's memory by recovering context. 3D world prototype.",
   "scripts": {
