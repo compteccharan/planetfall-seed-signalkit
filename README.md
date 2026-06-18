@@ -80,11 +80,11 @@ accept, type `entire dispatch` to file the day's report.
 
 **Level 3 — Launch Clearance.** No walking — you're in the pilot's chair, and
 the launch computer won't arm on work nobody can account for. The ship asks
-five questions about work you never watched. Pick a way to look each one up
+three questions about work you never watched. Pick a way to look each one up
 (`1`–`3`): a raw command, a skill that runs it for you, or — occasionally — a
 dead end that costs only seconds. The answer lands on screen; confirm it to
-lock a launch-code segment. Five segments, then `entire dispatch` files the
-flight log: ignition, fireworks, liftoff.
+lock a launch-code segment. Three segments grant clearance: ignition,
+fireworks, liftoff.
 
 Winning a level offers `Enter` to carry you straight into the next. Failing
 only ever offers `R` to retry — the clock is the only enemy.

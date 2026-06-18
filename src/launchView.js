@@ -11,25 +11,26 @@ import { LEVEL_ONE_ARCHIVE_ROWS } from "./levelOneRecords.js";
 // The launch computer won't arm on work nobody can account for, and most of
 // today's work the player never watched (the subagents did it). So the ship's
 // AI — the amnesiac from Level 1, now running on the memory the player banked
-// for it — asks five questions only the record can answer:
+// for it — asks three questions only the record can answer:
 //
 //   the ship asks in plain words            → you provably don't know
 //   pick a way to look it up (1/2/3)        → command or skill, your call
 //   it runs visibly, answers in its voice   → raw card vs. one plain sentence
 //   pick the answer — it's on screen        → a launch-code segment locks
-//   five segments → ignition → LIFTOFF      → the game's ending
+//   three segments → ignition → LIFTOFF     → the game's ending
 //
 // Menu rule: mostly ALL VALID (different lenses on the same truth), with the
 // occasional polite dead end that costs only clock seconds and teaches the
 // tool's boundary. Failure lives in the launch window, nowhere else.
 
-const TOTAL_TIME = 150;      // seconds of launch window (tunable)
-const LOW_TIME = 45;         // clock turns urgent under this
-const CRIT_TIME = 15;        // clock goes CRITICAL under this
-const PANIC_TIME = 45;       // the SKY starts shifting toward panic-red
+const TOTAL_TIME = 90;       // seconds of launch window (tunable)
+const LOW_TIME = 30;         // clock turns urgent under this
+const CRIT_TIME = 10;        // clock goes CRITICAL under this
+const PANIC_TIME = 30;       // the SKY starts shifting toward panic-red
 const NEXT_DELAY = 1.6;      // seconds between a confirm and the next question
 const IGN_DUR = 3;           // seconds of 3-2-1 before ignition
 const LIFT_DUR = 9;          // seconds of liftoff before the win screen
+const ANSWER_KEYS = ["A", "B", "C"];
 
 // Sky palette — calm/panic as in L1/L2, plus the space we lift into.
 const SKY_CALM  = new THREE.Color(0x2a2350);
@@ -60,32 +61,31 @@ const BRIEFING_BEATS = [
   "Run the right commands to read the records, and use what you find to answer the pre-flight questions.",
 ];
 
-// ---------- the five pre-flight questions ----------
+// ---------- the three pre-flight questions ----------
 // Each tool: label (what the menu shows), echo (what "runs" at the prompt),
 // rows ([key, value] output lines), ok (false = dead end), note (the flash).
 // `site` = which upgrade flares on confirm (index into SYSTEMS, or null).
-function cardRows(sys) {
-  return [["checkpoint", sys.ckpt], ...sys.card];
-}
-const ANTENNA = SYSTEMS[2], COILS = SYSTEMS[0], STRUTS = SYSTEMS[4];
+const ANTENNA = SYSTEMS[2];
 
 const QUESTIONS = [
   {
-    q: "First check — the long-range antenna. The log says the rebuild wasn't simple. How many attempts did it take?",
+    q: "How many attempts did it take to repair the antenna?",
     site: 2,
     tools: [
       {
         label: `entire checkpoint explain ${ANTENNA.ckpt}`,
         echo: `entire checkpoint explain ${ANTENNA.ckpt}`,
-        ok: true, rows: cardRows(ANTENNA),
+        ok: true, rows: [
+          ["Intent:", "Repair the long-range antenna."],
+          ["Outcome:", "Rebuilt the antenna after 3 attempts. The first 2 fell over."],
+        ],
         note: "the raw record — the answer is in there",
       },
       {
-        label: "Skill: what-happened — ask in plain language",
+        label: "Skill: what-happened",
         echo: "what happened to the antenna?",
         ok: true, rows: [
-          ["ran", `entire checkpoint explain ${ANTENNA.ckpt}`],
-          ["answer", "subagent-3 respun the mast into a signal spire — it took 3 attempts; the first two fell over."],
+          ["", "The antenna repair took 3 attempts. The first 2 fell over."],
         ],
         note: "the skill ran the command for you",
       },
@@ -98,61 +98,63 @@ const QUESTIONS = [
         note: "the day's report counts systems, not attempts — try another way",
       },
     ],
-    answers: ["2", "3", "5"], correct: 1,
+    answers: ["3", "2", "5"], correct: 0,
   },
   {
-    q: "Something on this ship is built from salvaged hull plate. Which system?",
-    site: 0,
+    q: "How many stars did the steering repair map?",
+    site: 1,
     tools: [
       {
-        label: `entire checkpoint search "hull plate"`,
-        echo: `entire checkpoint search "hull plate"`,
+        label: `entire checkpoint search "stars"`,
+        echo: `entire checkpoint search "stars"`,
         ok: true, rows: [
-          ["search", `1 match for "hull plate"`],
-          [COILS.ckpt, "ignition coils → Plasma Ring — rebuilt from salvaged hull plate ×3"],
+          ["", "1 match found"],
+          ["", "Subagent-2 rebuilt the steering controls and mapped 412 stars."],
         ],
-        note: "one typed phrase, one match — that's search",
+        note: "search found the matching record",
       },
       {
-        label: "Skill: recall — ask in plain language",
-        echo: "what did we build from hull plate?",
+        label: "Skill: recall",
+        echo: "how many stars did the steering repair map?",
         ok: true, rows: [
-          ["ran", `entire checkpoint search "hull plate"`],
-          ["answer", "the ignition coils — subagent-1 rebuilt them as a plasma ring from salvaged hull plate."],
+          ["", "Subagent-2 mapped 412 stars."],
         ],
-        note: "the skill searched the record for you",
+        note: "the skill summarized the record for you",
       },
       {
         label: "entire checkpoint explain",
         echo: "entire checkpoint explain",
         ok: false, rows: [
-          ["error", "explain needs a checkpoint id — and which one is exactly the question"],
+          ["error", "explain needs a checkpoint id — search first to find the right record"],
         ],
-        note: "when you don't know WHERE, search is the tool",
+        note: "search first, then explain when you have the record",
       },
     ],
-    answers: ["NAV CORE", "IGNITION COILS", "LANDING STRUTS"], correct: 1,
+    answers: ["112", "520", "412"], correct: 2,
   },
   {
-    q: "Cross-check the manifest: how many checkpoints does the ship's record hold, all told?",
+    q: "How many records did the ship recover?",
     site: null,
     tools: [
       {
         label: "entire checkpoint list",
         echo: "entire checkpoint list",
-        ok: true, rows: [
+        ok: true, dense: true, columns: true, rows: [
           ...L1_RECORD,
-          ...SYSTEMS.map((s) => [s.ckpt, `subagent fix: ${s.name.toLowerCase()} → ${s.became}`]),
-          ["total", `${RECORD_TOTAL} checkpoints`],
+          [SYSTEMS[0].ckpt, "repair: engine"],
+          [SYSTEMS[1].ckpt, "repair: steering"],
+          [SYSTEMS[2].ckpt, "repair: antenna"],
+          [SYSTEMS[3].ckpt, "repair: air"],
+          [SYSTEMS[4].ckpt, "repair: landing"],
+          ["total", `${RECORD_TOTAL} records`],
         ],
-        note: "the whole record, oldest first",
+        note: "the list counted the records",
       },
       {
-        label: "Skill: recall — ask in plain language",
-        echo: "how big is the ship's record?",
+        label: "Skill: recall",
+        echo: "how many records did the ship recover?",
         ok: true, rows: [
-          ["ran", "entire checkpoint list"],
-          ["answer", "eight checkpoints — three memories you banked after the crash, five subagent repairs."],
+          ["", `The ship recovered ${RECORD_TOTAL} records: 3 memories and 5 repairs.`],
         ],
         note: "the skill counted for you",
       },
@@ -166,55 +168,6 @@ const QUESTIONS = [
       },
     ],
     answers: ["5", "8", "13"], correct: 1,
-  },
-  {
-    q: "Pre-flight flags the landing gear: this ship doesn't have legs anymore. Why does the ship float?",
-    site: 4,
-    tools: [
-      {
-        label: `entire checkpoint explain ${STRUTS.ckpt}`,
-        echo: `entire checkpoint explain ${STRUTS.ckpt}`,
-        ok: true, rows: cardRows(STRUTS),
-        note: "the raw record — read it and believe it",
-      },
-      {
-        label: "Skill: what-happened — ask in plain language",
-        echo: "why does the ship float?",
-        ok: true, rows: [
-          ["ran", `entire checkpoint explain ${STRUTS.ckpt}`],
-          ["answer", "the strut had seized solid — subagent-5 swapped it for grav skids. torque spec: vibes."],
-        ],
-        note: "the skill went and asked the checkpoint",
-      },
-      {
-        label: "entire checkpoint list",
-        echo: "entire checkpoint list",
-        ok: false, rows: [
-          [STRUTS.ckpt, "subagent fix: landing struts → Grav Skid"],
-        ],
-        note: "list says WHAT changed — for WHY, go one level deeper",
-      },
-    ],
-    answers: [
-      "the struts became grav skids",
-      "a fuel leak lightened the hull",
-      "the nav core recalibrated gravity",
-    ], correct: 0,
-  },
-  {
-    // The ceremonial closer, like L1's list and L2's dispatch: nothing to
-    // learn, one Enter — filing the flight log IS the final confirmation.
-    q: "Last item. File the flight log — everything the crew did to make this ship fly.",
-    site: null,
-    single: {
-      label: "entire dispatch",
-      rows: [
-        ["DISPATCH", "flight log — planetfall recovery"],
-        ...SYSTEMS.map((s) => ["·", `${s.name.toLowerCase()} → ${s.became} (${s.ckpt.slice(0, 6)}…)`]),
-        ["filed", `from ${RECORD_TOTAL} checkpoints · crew: 1 human, 5 subagents, 1 ship`],
-        ["cleared", "launch code complete — ignition"],
-      ],
-    },
   },
 ];
 
@@ -387,7 +340,6 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   const countdownTime = document.getElementById("lc-countdown-time");
   const codeSegsEl = document.getElementById("lc-code-segs");
   const consoleEl = document.getElementById("lc-console");
-  const speakerEl = document.getElementById("lc-speaker");
   const questionEl = document.getElementById("lc-question");
   const menuEl = document.getElementById("lc-menu");
   const outputEl = document.getElementById("lc-output");
@@ -411,7 +363,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   let burstTimer = 0;
   let qIndex = 0;
   let briefingIndex = 0;
-  let phase = "menu";          // menu → chips → done (or "single" on the finale)
+  let phase = "menu";          // menu → chips → done
   let usedTool = null;         // which menu row ran (for dimming)
   let deadTools = new Set();
   let wrongChips = new Set();
@@ -421,10 +373,9 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   let timerRunning = false;
 
   // Launch-code segments: one per question, showing the first hex of the
-  // checkpoint that answered it (the finale's segment reads IGN).
+  // checkpoint that answered it.
   const segLabels = () => QUESTIONS.map((Q) => {
     if (!Q.done) return null;
-    if (Q.single) return "IGN";
     return Q.site != null ? SYSTEMS[Q.site].ckpt.slice(0, 4) : "8/8 ";
   });
   function renderCode() {
@@ -444,38 +395,42 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     msgEl.classList.add(ok ? "show-ok" : "show-err");
     msgTimer = setTimeout(() => msgEl.classList.remove("show-ok", "show-err"), 3600);
   }
-  function renderOutput(echo, rows, isSkill) {
-    if (!outputEl) return;
-    outputEl.innerHTML =
-      `<div class="lc-row lc-echo"><span class="lc-prompt">${isSkill ? "you:" : "crashlog:~$"}</span>` +
-      `<span class="lc-cmd">${echo}</span></div>` +
-      rows.map(([k, v]) =>
-        `<div class="lc-row"><span class="lc-k">${k}</span><span class="lc-v">${v}</span></div>`
+  function renderRows(rows, columns = false) {
+    if (!columns) {
+      return rows.map(([k, v]) =>
+        k
+          ? `<div class="lc-row"><span class="lc-k">${k}</span><span class="lc-v">${v}</span></div>`
+          : `<div class="lc-row lc-row-full"><span class="lc-v">${v}</span></div>`
       ).join("");
+    }
+    const totalRow = rows.find(([k]) => k === "total");
+    const listRows = rows.filter(([k]) => k !== "total");
+    return `<div class="lc-list-grid">` +
+      listRows.map(([k, v]) =>
+        `<div class="lc-row"><span class="lc-k">${k}</span><span class="lc-v">${v}</span></div>`
+      ).join("") +
+      `</div>` +
+      (totalRow ? `<div class="lc-row lc-row-total"><span class="lc-k">${totalRow[0]}</span><span class="lc-v">${totalRow[1]}</span></div>` : "");
+  }
+  function renderOutput(echo, rows, isSkill, dense = false, columns = false) {
+    if (!outputEl) return;
+    outputEl.classList.toggle("is-dense", dense);
+    outputEl.innerHTML =
+      `<div class="lc-row lc-echo"><span class="lc-prompt">$</span>` +
+      `<span class="lc-cmd">${echo}</span></div>` +
+      renderRows(rows, columns);
     outputEl.classList.remove("hidden");
   }
   function renderQuestion() {
     const Q = QUESTIONS[qIndex];
-    if (speakerEl) speakerEl.textContent = `SHIP · PRE-FLIGHT ${qIndex + 1} / ${QUESTIONS.length}`;
     if (questionEl) questionEl.textContent = Q.q;
     outputEl?.classList.add("hidden");
+    outputEl?.classList.remove("is-dense");
     if (outputEl) outputEl.innerHTML = "";
     answersEl?.classList.add("hidden");
     if (answersEl) answersEl.innerHTML = "";
-    if (Q.single) {
-      phase = "single";
-      if (menuEl) {
-        menuEl.innerHTML =
-          `<div class="lc-single"><span class="lc-prompt">crashlog:~$</span>` +
-          `<span class="lc-cmd">${Q.single.label}</span><span class="lc-cursor"></span></div>` +
-          `<div class="lc-single-cta"><span class="cta-label">PRESS</span>` +
-          `<kbd class="cta-key cta-key-yes">Enter</kbd><span class="cta-note">file it</span></div>`;
-        menuEl.classList.remove("hidden");
-      }
-    } else {
-      phase = "menu";
-      renderMenu();
-    }
+    phase = "menu";
+    renderMenu();
   }
   function renderMenu() {
     const Q = QUESTIONS[qIndex];
@@ -497,7 +452,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
       `<div class="lc-answers-head">CONFIRM FOR THE LAUNCH COMPUTER</div>` +
       Q.answers.map((a, i) =>
         `<button type="button" class="lc-chip${wrongChips.has(i) ? " is-wrong" : ""}" data-chip="${i}">` +
-        `<kbd>${i + 1}</kbd><span>${a}</span></button>`
+        `<kbd>${ANSWER_KEYS[i] ?? i + 1}</kbd><span>${a}</span></button>`
       ).join("");
     answersEl.classList.remove("hidden");
   }
@@ -509,7 +464,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     const tool = Q.tools[i];
     if (!tool || deadTools.has(i)) return;
     const isSkill = tool.label.startsWith("Skill:");
-    renderOutput(tool.echo, tool.rows, isSkill);
+    renderOutput(tool.echo, tool.rows, isSkill, !!tool.dense, !!tool.columns);
     if (tool.ok) {
       usedTool = i;
       phase = "chips";
@@ -558,17 +513,13 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
         wrongChips = new Set();
         renderQuestion();
       }, NEXT_DELAY * 1000);
+    } else {
+      beginIgnition();
     }
   }
-  function fileFlightLog() {
-    if (phase !== "single" || launched) return;
-    const Q = QUESTIONS[qIndex];
-    Q.done = true;
-    phase = "done";
-    renderOutput(Q.single.label, Q.single.rows, false);
-    menuEl?.classList.add("hidden");
-    renderCode();
-    flashMsg("flight log filed — ignition", true);
+  function beginIgnition() {
+    if (launched || igniting) return;
+    flashMsg("launch clearance granted — ignition", true);
     timerRunning = false;
     countdownEl?.classList.remove("is-low", "is-critical");
     // The island salutes: every system's beam fires at full power.
@@ -803,13 +754,19 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
       if (won && e.code === "KeyB") onExit?.();
       return;
     }
-    if (phase === "single" && e.code === "Enter") { fileFlightLog(); e.preventDefault(); return; }
     if (e.key >= "1" && e.key <= "3") {
       const i = Number(e.key) - 1;
       if (phase === "menu") pickTool(i);
-      else if (phase === "chips") pickChip(i);
       e.preventDefault();
       return;
+    }
+    if (phase === "chips") {
+      const i = ANSWER_KEYS.indexOf(e.key.toUpperCase());
+      if (i >= 0) {
+        pickChip(i);
+        e.preventDefault();
+        return;
+      }
     }
     if (e.code === "KeyB") onExit?.();
   }
@@ -817,7 +774,6 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     if (!active || failed || launched) return;
     const btn = e.target.closest?.("[data-tool]");
     if (btn) pickTool(Number(btn.dataset.tool));
-    else if (phase === "single" && e.target.closest?.(".lc-single, .lc-single-cta")) fileFlightLog();
   });
   answersEl?.addEventListener("click", (e) => {
     if (!active || failed || launched) return;

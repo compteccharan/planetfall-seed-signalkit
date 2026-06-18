@@ -2585,12 +2585,14 @@ body.hit-flash::after {
 #lc-console {
   position: absolute;
   pointer-events: auto;
-  bottom: 70px;
+  bottom: 62px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(620px, calc(100vw - 40px));
-  padding: 15px 18px;
-  background: rgba(4, 10, 18, 0.88);
+  width: min(780px, calc(100vw - 36px));
+  max-height: min(68vh, 560px);
+  padding: 20px 22px;
+  overflow-y: auto;
+  background: rgba(4, 10, 18, 0.92);
   border: 1px solid rgba(111, 227, 255, 0.42);
   border-radius: 8px;
   box-shadow: 0 14px 40px rgba(2, 4, 10, 0.55), 0 0 24px rgba(111, 227, 255, 0.12);
@@ -2599,33 +2601,28 @@ body.hit-flash::after {
 }
 #lc-console.hidden { display: none; }
 
-#lc-speaker {
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  font-weight: 700;
-  color: var(--accent);
-  margin-bottom: 7px;
-}
 #lc-question {
-  font-size: 14.5px;
-  line-height: 1.5;
+  font-size: 18px;
+  line-height: 1.38;
+  font-weight: 700;
   color: var(--ink);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 /* The tool menu — pick a way to look it up */
 #lc-menu:not(.hidden) {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .lc-opt {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 12px;
+  padding: 11px 13px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
+  font-size: 15.5px;
+  line-height: 1.35;
   text-align: left;
   color: var(--ink);
   cursor: pointer;
@@ -2642,10 +2639,10 @@ body.hit-flash::after {
 .lc-opt kbd {
   display: inline-grid;
   place-items: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: 28px;
+  height: 28px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: #04121a;
   background: linear-gradient(90deg, #6fe3ff, #9af0ff);
@@ -2669,39 +2666,77 @@ body.hit-flash::after {
 #lc-output:not(.hidden) {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 12px;
-  padding-top: 10px;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid rgba(111, 227, 255, 0.16);
-  max-height: 178px;
+  max-height: 240px;
   overflow-y: auto;
+}
+#lc-output.is-dense {
+  gap: 5px;
+  max-height: none;
+  overflow-y: visible;
+}
+.lc-list-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 4px;
 }
 .lc-row {
   display: flex;
-  gap: 12px;
-  font-size: 12.5px;
-  line-height: 1.35;
+  gap: 16px;
+  font-size: 17px;
+  line-height: 1.45;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
-.lc-row .lc-k { color: var(--ink); opacity: 0.55; min-width: 96px; flex: none; }
-.lc-row .lc-v { color: var(--ink); opacity: 0.85; }
-.lc-echo { margin-bottom: 3px; }
+.lc-row .lc-k {
+  color: #ffd27a;
+  font-weight: 700;
+  opacity: 1;
+  min-width: 112px;
+  flex: none;
+}
+.lc-row .lc-v { color: var(--ink); opacity: 0.96; }
+.lc-echo {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+#lc-output.is-dense .lc-row {
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+#lc-output.is-dense .lc-row .lc-k {
+  min-width: 86px;
+  color: var(--ink);
+  font-weight: 700;
+  opacity: 0.7;
+}
+#lc-output.is-dense .lc-row-total {
+  margin-top: 6px;
+}
+#lc-output.is-dense .lc-echo {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
 .lc-prompt { color: var(--accent); opacity: 0.9; flex: none; }
 .lc-cmd { color: var(--ink); }
 
 /* Confirm chips — the answer is on screen; click it */
 #lc-answers:not(.hidden) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid rgba(92, 255, 176, 0.2);
 }
 .lc-answers-head {
-  width: 100%;
-  font-size: 10px;
+  grid-column: 1 / -1;
+  font-size: 12px;
   letter-spacing: 0.22em;
   font-weight: 700;
   color: #7cffb0;
@@ -2709,12 +2744,14 @@ body.hit-flash::after {
 .lc-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--ink);
   cursor: pointer;
   background: rgba(92, 255, 176, 0.08);
@@ -2730,14 +2767,14 @@ body.hit-flash::after {
 .lc-chip kbd {
   display: inline-grid;
   place-items: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 30px;
+  height: 30px;
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   color: #04121a;
   background: linear-gradient(90deg, #5cffb0, #bfffe0);
-  border-radius: 4px;
+  border-radius: 7px;
   flex: none;
 }
 .lc-chip.is-wrong {
@@ -2773,9 +2810,9 @@ body.hit-flash::after {
 
 /* Confirm / dead-end flashes, same voice as the terminal's */
 #lc-msg {
-  margin-top: 10px;
-  min-height: 16px;
-  font-size: 12.5px;
+  margin-top: 12px;
+  min-height: 18px;
+  font-size: 13.5px;
   letter-spacing: 0.02em;
   opacity: 0;
   transition: opacity 0.25s ease;
@@ -2786,9 +2823,53 @@ body.hit-flash::after {
 @media (max-width: 680px) {
   #lc-code { top: 124px; left: 16px; padding: 9px 11px; }
   .lc-seg { min-width: 36px; height: 22px; font-size: 10.5px; }
-  #lc-console { bottom: 48px; padding: 12px 13px; }
-  #lc-question { font-size: 13px; }
-  .lc-opt { font-size: 11.5px; }
+  #lc-console {
+    bottom: 36px;
+    width: calc(100vw - 24px);
+    max-height: min(64vh, 520px);
+    padding: 15px 14px;
+  }
+  #lc-question { font-size: 16px; }
+  .lc-opt {
+    gap: 9px;
+    padding: 10px 11px;
+    font-size: 14px;
+  }
+  .lc-opt kbd {
+    min-width: 25px;
+    height: 25px;
+    font-size: 12.5px;
+  }
+  #lc-output:not(.hidden) {
+    max-height: 190px;
+  }
+  .lc-row {
+    gap: 10px;
+    font-size: 14.5px;
+  }
+  .lc-row .lc-k {
+    min-width: 82px;
+  }
+  .lc-echo { font-size: 13px; }
+  #lc-answers:not(.hidden) {
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+  .lc-answers-head {
+    font-size: 10px;
+  }
+  .lc-chip {
+    gap: 7px;
+    min-height: 44px;
+    padding: 8px 8px;
+    font-size: 14px;
+  }
+  .lc-chip kbd {
+    min-width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
 }
 
 /* Ignition countdown — 3… 2… 1… IGNITION */
