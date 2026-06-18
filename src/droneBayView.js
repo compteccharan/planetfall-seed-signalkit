@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { makeBeamTexture, makeIceBlock } from "./memoryProps.js";
+import { createLeaderboardEntry } from "./leaderboard.js";
+import { createLeaderboardPanel } from "./leaderboardPanel.js";
 
 // LEVEL 2 ("The Drone Bay") — a COMMAND PASS / order-ticket rush.
 // (Full design notes live above createDroneBayView, further down this file.)
@@ -1190,12 +1192,14 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   const failEl = document.getElementById("db-fail");
   const failTitle = document.getElementById("db-lf-title");
   const failSub = document.getElementById("db-lf-sub");
+  const leaderboardPanel = createLeaderboardPanel({ mount: dbHud, onClose: hideLeaderboard });
 
   let active = false, started = false, failed = false, reportSent = false;
   let practiceMode = false, practiceComplete = false;
   let promptText = null;
   let msgTimer = null, winTimer = null, briefingIndex = 0, modePromptState = null, lessonKey = null;
   let timeLeft = TOTAL_TIME, timerRunning = false, elapsed = 0;
+  let mistakes = 0;
   let panelMode = null, reviewPart = null, buffer = "";
   let boardRenderT = 0;
 
@@ -1425,6 +1429,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       d.busy = false; d.part = null; d.phase = "home"; d.flyProg = 0; d.weldAt = null;
       d.mesh.position.copy(d.home);
     }
+    mistakes = 0;
   }
   function restorePracticePart() {
     const p = parts[PRACTICE_PART_IDX];
@@ -1444,6 +1449,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   }
   function startPractice() {
     hideModePrompt();
+    hideLeaderboard();
     resetWorkState();
     failed = false; reportSent = false; started = true; practiceMode = true; practiceComplete = false;
     timeLeft = TOTAL_TIME; timerRunning = false; elapsed = 0; boardRenderT = 0;
@@ -1458,8 +1464,9 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     closePanel();
     hideTutorialFocus();
     failed = false; reportSent = false; started = true; practiceMode = false;
-    timeLeft = TOTAL_TIME; timerRunning = true; elapsed = 0; boardRenderT = 0;
+    timeLeft = TOTAL_TIME; timerRunning = true; elapsed = 0; boardRenderT = 0; mistakes = 0;
     failEl?.classList.add("hidden"); winEl?.classList.add("hidden");
+    hideLeaderboard();
     spawnInitialDots();
     updateClock(); updateSystems();
   }
@@ -1518,6 +1525,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   }
   function showBriefing() {
     timerRunning = false;
+    hideLeaderboard();
     boardEl?.classList.add("hidden");
     tutorialEl?.classList.add("hidden");
     hideModePrompt();
@@ -1565,6 +1573,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     if (p.slateMesh) { scene.remove(p.slateMesh); p.slateMesh = null; }
     if (reviewPart === p) closePanel();
     p.state = "broken"; p.explained = false; p.placedIn = null; p.patience = 0; p.beltX = ENTRANCE_X;
+    if (!practiceMode) mistakes += 1;
     const dot = jobDots[p.dotIdx] || jobDots.find((j) => j.partIdx === p.idx);
     if (dot) {
       dot.spawned = true; dot.taken = false; dot.partIdx = p.idx;
@@ -1670,6 +1679,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   function placePart(p, sl) {
     if (!p.explained) { flashTerminal("run explain before placing the block", false); p.slateMesh.position.set(p.beltX, BELT_Y, 2); return; }
     if (sl.bayIdx !== p.targetSlot) {             // wrong bay → bounce it back (don't reveal what it was)
+      if (!practiceMode) mistakes += 1;
       p.slateMesh.position.set(p.beltX, BELT_Y, 2);
       spawnSpark(sl.slotPos.clone(), 0xe45572, 12);
       flashTerminal(`✗ that's not the ${sl.data.name.toLowerCase()} fix — re-read the report and try the bay it really belongs to`, false);
@@ -1751,9 +1761,30 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     if (failTitle) failTitle.textContent = "TIME'S UP";
     if (failSub) failSub.textContent = `You've only accounted for ${accounted} of ${parts.length} repairs.`;
     failEl?.classList.remove("hidden");
+    showLeaderboard();
+  }
+  function showLeaderboard() {
+    dbHud?.classList.add("has-leaderboard");
+    leaderboardPanel.show(createLeaderboardEntry({
+      level: 2,
+      outcome: "loss",
+      totalTime: TOTAL_TIME,
+      timeLeft,
+      durationSeconds: elapsed,
+      progressCompleted: placedCount(),
+      progressTotal: parts.length,
+      mistakes,
+    }), {
+      title: "Game over",
+    });
+  }
+  function hideLeaderboard() {
+    dbHud?.classList.remove("has-leaderboard");
+    leaderboardPanel.hide();
   }
   function resetLevel() {
     failed = false; reportSent = false; practiceMode = false; clearTimeout(winTimer);
+    hideLeaderboard();
     resetWorkState();
     elapsed = 0; timeLeft = TOTAL_TIME; timerRunning = false; boardRenderT = 0;
     failEl?.classList.add("hidden"); winEl?.classList.add("hidden");
@@ -1859,6 +1890,12 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   }
   function onKeyDown(e) {
     if (!active) return;
+    if (leaderboardPanel.containsTarget(e.target)) return;
+    if (leaderboardPanel.isVisible()) {
+      leaderboardPanel.focusInput();
+      e.preventDefault();
+      return;
+    }
     if (visibleModePromptKind()) {
       if (e.code === "Enter" || e.code === "Space") {
         acceptModePrompt();
@@ -2092,6 +2129,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     canvas.style.cursor = "default"; setPrompt(null); hideControls();
     tutorialEl?.classList.add("hidden"); termEl?.classList.add("hidden");
     failEl?.classList.add("hidden"); winEl?.classList.add("hidden"); briefingEl?.classList.add("hidden");
+    hideLeaderboard();
     modePrompt?.classList.add("hidden"); missionLesson?.classList.add("hidden");
     dbHud?.classList.add("hidden"); fpShared?.classList.add("hidden"); boardEl?.classList.add("hidden");
     termEl?.classList.remove("is-drone-bay-terminal");

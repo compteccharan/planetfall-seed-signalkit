@@ -14,7 +14,7 @@ const STORY_BEATS = [
 
 import { sfx } from "./sfx.js";
 
-export function createTitleScreen({ onStoryStart, onStart } = {}) {
+export function createTitleScreen({ onLeaderboard, onStoryStart, onStart } = {}) {
   const root = document.getElementById("title-screen");
   const screens = {
     main: document.getElementById("ts-main"),
@@ -173,6 +173,17 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
   function activate(el) {
     switch (el?.dataset.action) {
       case "start": startStory(); break;
+      case "leaderboard":
+        if (onLeaderboard) {
+          root.classList.add("is-leaderboard-open");
+          active = false;
+          onLeaderboard(() => {
+            root.classList.remove("is-leaderboard-open");
+            active = true;
+            setScreen("main");
+          });
+        }
+        break;
       case "options": setScreen("options"); break;
       case "controls": setScreen("controls"); break;
       case "display": setScreen("display"); break;
@@ -236,7 +247,7 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
     active = true;
     storyBeat = -1;
     story.classList.add("hidden");
-    root.classList.remove("hidden", "is-leaving", "is-story");
+    root.classList.remove("hidden", "is-leaving", "is-story", "is-leaderboard-open");
     document.body.classList.add("title-up");
     setScreen("main");
     syncSound();
@@ -245,6 +256,7 @@ export function createTitleScreen({ onStoryStart, onStart } = {}) {
   function hide() {
     active = false;
     document.body.classList.remove("title-up");
+    root.classList.remove("is-leaderboard-open");
     root.classList.add("is-leaving");
     setTimeout(() => root.classList.add("hidden"), 650); // match the CSS fade
   }

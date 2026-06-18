@@ -3,6 +3,8 @@ import { createTerrain } from "./terrain.js";
 import { makeBeamTexture } from "./memoryProps.js";
 import { SYSTEMS, UPGRADE_BUILDERS } from "./droneBayView.js";
 import { LEVEL_ONE_ARCHIVE_ROWS } from "./levelOneRecords.js";
+import { createLeaderboardEntry } from "./leaderboard.js";
+import { createLeaderboardPanel } from "./leaderboardPanel.js";
 
 // LEVEL 3 ("Launch Clearance") — the finale. The ship is rebuilt; now it has
 // to fly. The player sits in the pilot's chair for the first time, and the
@@ -350,6 +352,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   const winEl = document.getElementById("lc-win");
   const winSub = document.getElementById("lc-win-sub");
   const failEl = document.getElementById("lc-fail");
+  const leaderboardPanel = createLeaderboardPanel({ mount: hud, onClose: hideLeaderboard });
 
   let active = false;
   let started = false;
@@ -367,6 +370,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   let usedTool = null;         // which menu row ran (for dimming)
   let deadTools = new Set();
   let wrongChips = new Set();
+  let mistakes = 0;
   let nextTimer = null;
   let msgTimer = null;
   let timeLeft = TOTAL_TIME;
@@ -473,6 +477,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
       renderAnswers();
     } else {
       deadTools.add(i);
+      mistakes += 1;
       flashMsg(tool.note, false);
       renderMenu();
     }
@@ -483,6 +488,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     if (i < 0 || i >= Q.answers.length || wrongChips.has(i)) return;
     if (i !== Q.correct) {
       wrongChips.add(i);
+      mistakes += 1;
       flashMsg("not what the record says — read it again", false);
       renderAnswers();
       return;
@@ -614,6 +620,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   }
   function showBriefing() {
     timerRunning = false;
+    hideLeaderboard();
     briefingIndex = 0;
     renderBriefingBeat();
     briefingEl?.classList.remove("hidden");
@@ -622,6 +629,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   function startLevel() {
     if (started) return;
     started = true;
+    hideLeaderboard();
     briefingEl?.classList.add("hidden");
     consoleEl?.classList.remove("hidden");
     timeLeft = TOTAL_TIME;
@@ -640,6 +648,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     countdownEl?.classList.remove("is-low", "is-critical");
     consoleEl?.classList.add("hidden");
     failEl?.classList.remove("hidden");
+    showLeaderboard("loss");
   }
   function resetLevel() {
     failed = false;
@@ -658,6 +667,8 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     usedTool = null;
     deadTools = new Set();
     wrongChips = new Set();
+    mistakes = 0;
+    hideLeaderboard();
     clearTimeout(nextTimer);
     for (const Q of QUESTIONS) Q.done = false;
     for (const s of sites) {
@@ -710,9 +721,33 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     failEl?.classList.add("hidden");
     ignitionEl?.classList.add("hidden");
     if (winSub) winSub.textContent =
-      `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · 0 guesses`;
+      `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · ${mistakes} ${mistakes === 1 ? "miss" : "misses"}`;
     winEl?.classList.remove("hidden");
+    showLeaderboard("win");
     renderCode();
+  }
+
+  function buildLeaderboardRun(outcome) {
+    return createLeaderboardEntry({
+      level: 3,
+      outcome,
+      totalTime: TOTAL_TIME,
+      timeLeft,
+      progressCompleted: QUESTIONS.filter((Q) => Q.done).length,
+      progressTotal: QUESTIONS.length,
+      mistakes,
+    });
+  }
+  function showLeaderboard(outcome) {
+    const run = buildLeaderboardRun(outcome);
+    hud?.classList.add("has-leaderboard");
+    leaderboardPanel.show(run, {
+      title: outcome === "win" ? "Game complete" : "Game over",
+    });
+  }
+  function hideLeaderboard() {
+    hud?.classList.remove("has-leaderboard");
+    leaderboardPanel.hide();
   }
 
   function skipToEnd(outcome) {
@@ -741,6 +776,12 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
   // ---------- input ----------
   function onKeyDown(e) {
     if (!active) return;
+    if (leaderboardPanel.containsTarget(e.target)) return;
+    if (leaderboardPanel.isVisible()) {
+      leaderboardPanel.focusInput();
+      e.preventDefault();
+      return;
+    }
     if (!started) {
       if (e.code === "Enter" || e.code === "Space") { advanceBriefing(); e.preventDefault(); }
       return;
@@ -780,7 +821,6 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     const btn = e.target.closest?.("[data-chip]");
     if (btn) pickChip(Number(btn.dataset.chip));
   });
-
   // ---------- per-frame ----------
   function update(dt, t) {
     if (active && timerRunning && started && !failed && !launched) {
@@ -846,8 +886,9 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
       if (liftT >= LIFT_DUR) {
         won = true;
         if (winSub) winSub.textContent =
-          `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · 0 guesses`;
+          `homeward — ${RECORD_TOTAL} checkpoints · ${QUESTIONS.length} questions · ${mistakes} ${mistakes === 1 ? "miss" : "misses"}`;
         winEl?.classList.remove("hidden");
+        showLeaderboard("win");
       }
     } else if (!failed && !won) {
       // Idle cockpit sway — alive, not nauseating.
@@ -866,6 +907,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
       showBriefing();
     } else if (won) {
       winEl?.classList.remove("hidden");
+      showLeaderboard("win");
     } else if (failed) {
       resetLevel();                 // came back after a miss → fresh window
     } else if (!launched) {
@@ -888,6 +930,7 @@ export function createLaunchView(renderer, { onExit, onNewGame } = {}) {
     flashEl?.classList.remove("show");
     winEl?.classList.add("hidden");
     failEl?.classList.add("hidden");
+    hideLeaderboard();
   }
   function resize() {
     camera.aspect = window.innerWidth / window.innerHeight;

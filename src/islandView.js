@@ -4,6 +4,8 @@ import { genCheckpointId, makeIceBlock } from "./memoryProps.js";
 import { makeRecord, makeWreck } from "./fallingProps.js";
 import { levelOneRecordSummary } from "./levelOneRecords.js";
 import { sfx } from "./sfx.js";
+import { createLeaderboardEntry } from "./leaderboard.js";
+import { createLeaderboardPanel } from "./leaderboardPanel.js";
 
 // LEVEL 1 — "First Memories", rebuilt as a falling-records shooter.
 //
@@ -206,6 +208,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   const missionLessonText = document.getElementById("mission-lesson-text");
   const missionLessonCue = document.getElementById("mission-lesson-cue");
   const fpShared = document.getElementById("fp-shared");
+  const leaderboardPanel = createLeaderboardPanel({ mount: islandHud, onClose: hideLeaderboard });
 
   let active = false;
   let tutorialTimer = null, msgTimer = null, shakeT = 0;
@@ -230,6 +233,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   let timeLeft = TOTAL_TIME;
   let timerRunning = false;
   let timedRunStarted = false;
+  let elapsed = 0;
+  let mistakes = 0;
+  let lastBankedAt = 0;
   let failed = false;
   let started = false;
   let briefingIndex = 0;
@@ -391,6 +397,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     closeTerminal();
     timedRunStarted = true;
     timerRunning = true;
+    elapsed = 0;
+    mistakes = 0;
+    lastBankedAt = 0;
     updateClock();
     refreshHud();
   }
@@ -482,6 +491,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
       spawnSpark(hitObj.position.clone(), 0xff5a3c);
       sfx.wrong();
       if (timedRunStarted) {
+        mistakes += 1;
         timeLeft = Math.max(0, timeLeft - WRECK_PENALTY);
         updateClock();
       }
@@ -691,6 +701,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     const record = { id, summary };
     bankedRecords.push(record);
     banked += 1;
+    if (timedRunStarted) lastBankedAt = elapsed;
     updateTally();
 
     // shatter the ice + dismiss the banked record with a little sparkle
@@ -751,10 +762,31 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     if (lfSub) lfSub.textContent =
       `You only captured ${banked} of ${MIN_TO_PASS} records.`;
     levelFail?.classList.remove("hidden");
+    showLeaderboard();
+  }
+  function showLeaderboard() {
+    islandHud?.classList.add("has-leaderboard");
+    leaderboardPanel.show(createLeaderboardEntry({
+      level: 1,
+      outcome: "loss",
+      totalTime: TOTAL_TIME,
+      timeLeft,
+      durationSeconds: lastBankedAt,
+      progressCompleted: banked,
+      progressTotal: MIN_TO_PASS,
+      mistakes,
+    }), {
+      title: "Game over",
+    });
+  }
+  function hideLeaderboard() {
+    islandHud?.classList.remove("has-leaderboard");
+    leaderboardPanel.hide();
   }
   function resetLevel() {
     failed = false;
     levelFail?.classList.add("hidden");
+    hideLeaderboard();
     clearFalling();
     clearBankPiece();
     banking = false;
@@ -772,6 +804,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     updateTally();
     spawnTimer = 0;
     timeLeft = TOTAL_TIME;
+    elapsed = 0;
+    mistakes = 0;
+    lastBankedAt = 0;
     timedRunStarted = false;
     timerRunning = false;
     updateClock();
@@ -785,6 +820,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   // ---------- briefing ----------
   function showBriefing() {
     timerRunning = false;
+    hideLeaderboard();
     tutorialEl?.classList.add("hidden");
     briefingIndex = 0;
     renderBriefingBeat();
@@ -793,6 +829,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   function startLevel() {
     if (started) return;
     started = true;
+    hideLeaderboard();
     if (modePrompt) {
       modePrompt.classList.add("hidden");
       delete modePrompt.dataset.mode;
@@ -801,6 +838,9 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     modeAction?.blur();
     briefingEl?.classList.add("hidden");
     timeLeft = TOTAL_TIME;
+    elapsed = 0;
+    mistakes = 0;
+    lastBankedAt = 0;
     timedRunStarted = false;
     timerRunning = false;
     updateTally();
@@ -827,12 +867,16 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     clearBankPiece();
     hideModePrompt();
     hideBankLesson();
+    hideLeaderboard();
     briefingEl?.classList.add("hidden");
     tutorialEl?.classList.add("hidden");
     started = true;
     timedRunStarted = false;
     timerRunning = false;
     timeLeft = 0;
+    elapsed = TOTAL_TIME;
+    mistakes = 0;
+    lastBankedAt = TOTAL_TIME;
     banking = false;
     bankState = "done";
     lessonPaused = false;
@@ -867,6 +911,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   }
   function onMouseDown(e) {
     if (!active || e.button !== 0) return;
+    if (leaderboardPanel.containsTarget(e.target)) return;
     if (visibleModePromptKind()) {
       acceptModePrompt();
       e.preventDefault();
@@ -880,6 +925,12 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
   }
   function onKeyDown(e) {
     if (!active) return;
+    if (leaderboardPanel.containsTarget(e.target)) return;
+    if (leaderboardPanel.isVisible()) {
+      leaderboardPanel.focusInput();
+      e.preventDefault();
+      return;
+    }
 
     if (visibleModePromptKind()) {
       acceptModePrompt();
@@ -958,6 +1009,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
 
     // Level countdown.
     if (active && timerRunning && !failed && !lessonPaused) {
+      elapsed += dt;
       timeLeft = Math.max(0, timeLeft - dt);
       updateClock();
       if (timeLeft <= 0) endRun();
@@ -1069,6 +1121,7 @@ export function createIslandView(renderer, { onExit, onComplete, onNext, onNewGa
     modePrompt?.classList.add("hidden");
     termEl?.classList.add("hidden");
     levelFail?.classList.add("hidden");
+    hideLeaderboard();
     briefingEl?.classList.add("hidden");
     islandHud?.classList.add("hidden");
     fpShared?.classList.add("hidden");

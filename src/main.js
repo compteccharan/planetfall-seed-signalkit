@@ -5,6 +5,8 @@ import { createDroneBayView } from "./droneBayView.js";
 import { createArchiveView } from "./archiveView.js";
 import { createLaunchView } from "./launchView.js";
 import { createTitleScreen } from "./titleScreen.js";
+import { loadLeaderboard } from "./leaderboard.js";
+import { createLeaderboardPanel } from "./leaderboardPanel.js";
 import { sfx } from "./sfx.js";
 
 const canvas = document.getElementById("scene");
@@ -204,12 +206,47 @@ let current = requestedView === "island" ? islandView
 current.enter();
 endShortcut && current.skipToEnd?.(endShortcut.outcome);
 
+let resumeTitleAfterLeaderboard = null;
+let titleLeaderboardRequest = 0;
+const titleLeaderboardPanel = createLeaderboardPanel({
+  mount: document.getElementById("ui"),
+  onClose: closeTitleLeaderboard,
+});
+
+function closeTitleLeaderboard() {
+  titleLeaderboardRequest += 1;
+  titleLeaderboardPanel.hide();
+  const resume = resumeTitleAfterLeaderboard;
+  resumeTitleAfterLeaderboard = null;
+  resume?.();
+}
+
+async function showTitleLeaderboard(resumeTitle) {
+  const requestId = ++titleLeaderboardRequest;
+  resumeTitleAfterLeaderboard = resumeTitle;
+  titleLeaderboardPanel.showBoard([], {
+    title: "Leaderboard",
+    label: "Loading scores",
+    emptyText: "Loading...",
+  });
+
+  const result = await loadLeaderboard();
+  if (requestId !== titleLeaderboardRequest) return;
+
+  titleLeaderboardPanel.showBoard(result.entries, {
+    title: "Leaderboard",
+    label: "Top 10 overall",
+    emptyText: result.error ? "Leaderboard unavailable" : "No scores yet",
+  });
+}
+
 // Title screen on a clean boot only — the dev shortcuts skip straight in.
 // While it's up the orbit view runs behind it as the attract backdrop.
 // When the story starts, bring the landing marker into the transmission shot
 // and hold it there. The final beat can then tell the player to click what is
 // already on screen.
 const titleScreen = createTitleScreen({
+  onLeaderboard: showTitleLeaderboard,
   onStoryStart: () => {
     planetView.reframe();
     planetView.setLandingMarkerHold(true);

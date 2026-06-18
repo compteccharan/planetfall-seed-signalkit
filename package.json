@@ -6,6 +6,7 @@
   "description": "Planetfall — a stranded astronaut reconstructs a lost ship's memory by recovering context. 3D world prototype.",
   "scripts": {
     "dev": "vite",
+    "dev:vercel": "VITE_USE_REMOTE_LEADERBOARD=1 npx vercel@latest dev",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -13,6 +14,7 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "three": "^0.169.0"
   }
 }
