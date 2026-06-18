@@ -722,6 +722,17 @@ const PART_FIX_JITTER = 0.7;
 const PART_FLY = 1.0;            // drone fly time to the slot / home
 const PART_MELT = 1.0;
 const DRAG_DEPTH = 22;           // how far in front of the camera held work floats
+// Forgiving drop: if the raw raycast under the pointer misses (label/edge/gap) or
+// lands on a FULL duplicate of the right bay, snap to the nearest EMPTY square of the
+// SAME system within this many on-screen pixels.
+// IMPORTANT: this radius does NOT prevent cross-system snaps and must never be relied
+// on for that. Cross-system safety is structural: resolveDropSlot classifies a dead-on
+// hit on a wrong system's square as "wrong" BEFORE snapping, and the snap loop only ever
+// considers squares of the held block's own system (the `sl.bayIdx !== p.targetSlot`
+// filter). So the radius is purely a feel/forgiveness knob — at small canvas sizes the
+// on-screen cell spacing can drop below this value (e.g. ~60px at 640x480), and that is
+// fine precisely because the bayIdx filter, not the radius, is the guard.
+const SNAP_RADIUS_PX = 60;
 
 // ship-slot layout (two rows of six squares above the belt)
 const SHIP_Y = 11.6, SHIP_Z = -13, SHIP_DX = 6.2;
@@ -1224,6 +1235,8 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   let downX = 0, downY = 0, picked = null, dragging = false;
+  // which square the current drag would drop into, and why — drives hover highlight
+  let hoverSlot = null, hoverKind = null, hoverDirect = false;
   function setNdc(e) { const r = canvas.getBoundingClientRect(); ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1; ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1; }
   function slateAtPointer(e) {
     setNdc(e); raycaster.setFromCamera(ndc, camera);
@@ -1246,6 +1259,44 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
     if (!hits.length) return null;
     let o = hits[0].object; while (o && o.userData.dotIdx === undefined) o = o.parent;
     return o ? jobDots[o.userData.dotIdx] : null;
+  }
+  // project a world position to canvas-relative pixel coords (same NDC basis as setNdc)
+  const _proj = new THREE.Vector3();
+  function slotScreenXY(sl) {
+    const r = canvas.getBoundingClientRect();
+    _proj.copy(sl.slotPos).project(camera);
+    return { x: (_proj.x * 0.5 + 0.5) * r.width, y: (-_proj.y * 0.5 + 0.5) * r.height, behind: _proj.z > 1 };
+  }
+  // Forgiving, FAIR drop resolution for a held block `p`. Returns { sl, kind }:
+  //   kind "correct"   → an EMPTY square of the right system (place succeeds)
+  //   kind "full"      → the right system, but every nearby square is taken
+  //   kind "wrong"     → the raw raycast landed on a different system's square
+  //   kind "miss"      → nothing under or near the pointer
+  // The nearest-square fallback NEVER crosses systems: it can only ever pull the drop
+  // onto an empty twin of the SAME bay the block belongs to, so deduction still matters.
+  function resolveDropSlot(p, e) {
+    const raw = slotAtPointer(e);
+    if (raw && raw.bayIdx === p.targetSlot && slotHasRoom(raw.idx)) return { sl: raw, kind: "correct" };
+    // A deliberate, dead-on hit on ANOTHER system's square is a wrong-system drop — classify
+    // it BEFORE the forgiving snap so the snap can never auto-solve the deduction by quietly
+    // pulling the block onto a nearby correct square. Only fall through to the snap when the
+    // pointer is over empty space (label/gap → raw is null) or over the right bay's own square.
+    if (raw && raw.bayIdx !== p.targetSlot) return { sl: raw, kind: "wrong" };
+    // Look for the nearest EMPTY square of the correct system within the snap radius,
+    // measured in screen space so a near-miss on the right bay still registers.
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    let best = null, bestD = SNAP_RADIUS_PX;
+    for (const sl of slots) {
+      if (sl.bayIdx !== p.targetSlot || !slotHasRoom(sl.idx)) continue;
+      const s = slotScreenXY(sl);
+      if (s.behind) continue;
+      const d = Math.hypot(s.x - px, s.y - py);
+      if (d < bestD) { bestD = d; best = sl; }
+    }
+    if (best) return { sl: best, kind: "correct" };           // snap to an empty twin of the right bay
+    if (raw) return { sl: raw, kind: "full" };                // raw can only be the right (full) bay here
+    return { sl: null, kind: "miss" };
   }
   function cursorDragPoint(e) {
     setNdc(e); raycaster.setFromCamera(ndc, camera);
@@ -1404,7 +1455,7 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   function resetWorkState() {
     closePanel();
     belted.length = 0;
-    picked = null; dragging = false;
+    picked = null; dragging = false; hoverSlot = null; hoverKind = null; hoverDirect = false;
     slotCells = separatedSlotCells(slotBays);
     pendingQueue = shuffled(TOTAL_JOBS);
     jobsSpawned = 0; spawnTimer = 0;
@@ -1871,7 +1922,22 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       }
       dragging = true;
     }
-    if (dragging && picked) { picked.slateMesh.position.copy(cursorDragPoint(e)); canvas.style.cursor = "grabbing"; return; }
+    if (dragging && picked) {
+      picked.slateMesh.position.copy(cursorDragPoint(e)); canvas.style.cursor = "grabbing";
+      // preview where this drop will land so the player sees the target before releasing
+      const res = resolveDropSlot(picked, e);
+      hoverSlot = res.sl; hoverKind = res.kind;
+      // Only a DIRECT raycast hit on the right bay's own empty square may glow green.
+      // A merely-snapped correct target is NOT surfaced, so the player can't sweep the
+      // grid hunting for the green halo instead of reading the report (no answer reveal).
+      const raw = slotAtPointer(e);
+      hoverDirect = !!(raw && res.sl === raw && res.kind === "correct");
+      // A merely-snapped correct target (within snap radius but not a direct hit) is
+      // about to succeed on release — leave it UN-highlighted rather than painting it
+      // rose, so the hover never contradicts the resolved drop (no false 'bad' halo).
+      if (res.kind === "correct" && !hoverDirect) hoverSlot = null;
+      return;
+    }
     if (panelMode === "report") { canvas.style.cursor = "default"; return; }
     const s = slateAtPointer(e) || dotAtPointer(e);
     canvas.style.cursor = s ? "pointer" : "default";   // slates + dispatch dots are clickable
@@ -1879,10 +1945,22 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
   function onPointerUp(e) {
     if (!active || !started || failed || visibleModePromptKind()) return;
     if (dragging && picked) {
-      const sl = slotAtPointer(e);
-      if (sl && picked.state === "review" && slotHasRoom(sl.idx)) placePart(picked, sl);   // drop into any bay with room
-      else { picked.slateMesh.position.set(picked.beltX, BELT_Y, 2); flashTerminal(sl ? "that bay's already full — pick an empty one" : "drop it onto a ship square", false); }
-      picked = null; dragging = false; canvas.style.cursor = "default"; return;
+      // forgiving resolve: a near-miss on the right bay (or a hit on its FULL twin)
+      // still snaps to an empty square of the correct system — never another system.
+      const { sl, kind } = resolveDropSlot(picked, e);
+      if (kind === "correct" && picked.state === "review") {
+        placePart(picked, sl);                                  // (a) success
+      } else if (kind === "full") {                             // (b) right system, every square taken
+        picked.slateMesh.position.set(picked.beltX, BELT_Y, 2);
+        spawnSpark(sl.slotPos.clone(), 0xffc24a, 10);
+        flashTerminal(`both ${sl.data.name.toLowerCase()} squares are full — wait for one to free up`, false);
+      } else if (kind === "wrong") {                            // (c) a square of the wrong system
+        placePart(picked, sl);                                  // placePart bounces + grades the wrong bay
+      } else {                                                  // (d) missed every square
+        picked.slateMesh.position.set(picked.beltX, BELT_Y, 2);
+        flashTerminal("missed the hull — drop the block onto a ship square", false);
+      }
+      picked = null; dragging = false; hoverSlot = null; hoverKind = null; hoverDirect = false; canvas.style.cursor = "default"; return;
     }
     if (picked) { explainPart(picked); picked = null; return; }   // a click on a sealed slate = explain
     const jd = dotAtPointer(e);                                    // a click on a waiting pip = dispatch
@@ -2000,7 +2078,17 @@ export function createDroneBayView(renderer, { onExit, onComplete, onNext, onNew
       let col = RING.broken, op = 0.68;
       if (filed) { col = RING.online; op = 0.88; }
       else if (occ.length) { col = RING.online; op = 0.8; }
-      ud.edgeMat.color.setHex(col); ud.edgeMat.opacity = op; ud.frameMat.emissive.setHex(0x000000);
+      // hover preview while dragging: green halo ONLY on a direct correct hit (not on a
+      // merely-snapped correct target, so the snap can't reveal the answer), rose on a
+      // full/wrong square so a bad target still reads as a bad target.
+      let emis = 0x000000;
+      if (dragging && picked && hoverSlot === sl) {
+        const good = hoverKind === "correct" && hoverDirect;
+        col = good ? ICE_MATCHED : 0xe45572;
+        op = 1.0;
+        emis = good ? 0x1d4a2c : 0x401512;
+      }
+      ud.edgeMat.color.setHex(col); ud.edgeMat.opacity = op; ud.frameMat.emissive.setHex(emis);
       ud.hint.visible = false;
     }
 
