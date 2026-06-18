@@ -74,6 +74,10 @@ git push -u origin your-change-name
 Then open a pull request on GitHub. Include what changed, how you tested it, and
 anything you are unsure about.
 
+This is an Entire-enabled repo, so some commits have recorded agent sessions
+and checkpoints attached to them. You can browse the project sessions at
+<https://entire.io/gh/blackgirlbytes/planetfall-seed-signalkit/sessions>.
+
 Please do not commit secrets, `.env*` files, `.vercel/`, `dist/`,
 `node_modules/`, or other generated/local files.
 
